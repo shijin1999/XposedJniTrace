@@ -22,8 +22,8 @@ android {
         applicationId "com.zhenxi.FunJni"
         minSdkVersion 21
         targetSdkVersion 21 //support old xposed
-        versionCode 1
-        versionName "1.0"
+        versionCode 110
+        versionName "1.1"
         ndk {
             abiFilters 'armeabi-v7a'
             abiFilters 'arm64-v8a'
@@ -74,11 +74,11 @@ android {
             }
         }
         release {
+            buildConfigField "boolean", "is_printf_log", "true"
             buildConfigField "String", "project_name", "\"${project_name}\""
-            buildConfigField "boolean", "is_printf_log", "false"
-            shrinkResources true
-            minifyEnabled true
-            zipAlignEnabled true
+            shrinkResources false
+            minifyEnabled false
+            zipAlignEnabled false
             proguardFiles 'proguard-rules.pro'
             externalNativeBuild {
                 cmake {
