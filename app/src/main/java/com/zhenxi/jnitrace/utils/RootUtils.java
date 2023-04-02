@@ -83,41 +83,29 @@ public class RootUtils {
     }
 
     public static void execShell(String cmd){
-        OutputStream outputStream=null;
-        DataOutputStream dataOutputStream=null;
-        try{
+        Process process = null;
+        DataOutputStream os = null;
+        try {
+            process = Runtime.getRuntime().exec("su"); //切换到root帐号
+            os = new DataOutputStream(process.getOutputStream());
+            os.writeBytes(cmd + "\n");
+            os.writeBytes("exit\n");
+            os.flush();
+            int e = process.waitFor();
+            CLog.e("execShell process.waitFor "+e);
+        } catch (Exception e) {
+            CLog.e("execShell get root error  " + e.getMessage());
+        } finally {
+            try {
+                if (os != null) {
+                    os.close();
+                }
+                if (process != null) {
+                    process.destroy();
+                }
+            } catch (Exception ignored) {
 
-            Runtime runtime = Runtime.getRuntime();
-            runtime.exec(cmd+"\n");
-            //权限设置
-            Process p = Runtime.getRuntime().exec("su");
-            //获取输出流
-            outputStream =  p.getOutputStream();
-            dataOutputStream =new DataOutputStream(outputStream);
-            //将命令写入
-            dataOutputStream.writeBytes(cmd+ "\n");
-            //提交命令
-            dataOutputStream.flush();
-
-        }
-        catch(Throwable t){
-            CLog.e("execShell error "+t.getMessage());
-            t.printStackTrace();
-        }finally {
-           if(outputStream!=null){
-               try {
-                   outputStream.close();
-               } catch (IOException e) {
-                   e.printStackTrace();
-               }
-           }
-           if(dataOutputStream!=null){
-               try {
-                   dataOutputStream.close();
-               } catch (IOException e) {
-                   e.printStackTrace();
-               }
-           }
+            }
         }
     }
 }

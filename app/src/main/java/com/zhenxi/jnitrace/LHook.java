@@ -170,9 +170,6 @@ public class LHook implements IXposedHookLoadPackage, IXposedHookZygoteInit {
                         CLog.e("not find root config file " + file.getPath());
                         return;
                     }
-                    file.setExecutable(true, false);
-                    file.setReadable(true, false);
-                    file.setWritable(true, false);
 
                     configInfo = FileUtils.readToString(file);
                     CLog.i("start read config success  " + configInfo);

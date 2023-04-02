@@ -229,19 +229,25 @@ public class MainListViewAdapter extends BaseAdapter {
     @SuppressWarnings("All")
     private void initConfig(String packageName, JSONObject jsonObject) {
         try {
-
             File config = new File("/data/data/"
                     + BuildConfig.APPLICATION_ID + "/" + BuildConfig.project_name + "Config");
-            config.setExecutable(true, false);
-            config.setReadable(true, false);
-            config.setWritable(true, false);
             CLog.e("temp config file path " + config.getPath());
             if (config.exists()) {
                 boolean delete = config.delete();
                 if (!delete) {
-                    CLog.e("delete org config file error");
+                    CLog.e("delete org config file error ,start root delete "+config.getPath());
+                    RootUtils.execShell("mv -f " + config.getPath());
                 }
             }
+            FileUtils.makeSureDirExist(config.getParentFile());
+            boolean configNewFile = config.createNewFile();
+            if(!configNewFile){
+                CLog.e(">>>>>>>>>>> create temp config file error "+config.getPath());
+                return;
+            }
+            config.setExecutable(true, false);
+            config.setReadable(true, false);
+            config.setWritable(true, false);
             CLog.e("start save config file " + config.getPath());
             FileUtils.saveString(config, jsonObject.toString());
 
@@ -257,10 +263,8 @@ public class MainListViewAdapter extends BaseAdapter {
             RootUtils.execShell("mv -f " + config.getPath() + " " + temp);
             //防止因为用户组权限问题导致open failed: EACCES (Permission denied)
             CLog.i(">>>>>>>>>> chmod 777 path -> " + tagFile);
-            RootUtils.execShell("chmod 777  " + tagFile.getPath());
-            //尝试利用magisk本身的busybox命令,直接chmod有的手机会失败
-            RootUtils.execShell("busybox chmod 777  " + tagFile.getPath());
-            CLog.i(">>>>>>>> initConfig finish  ");
+            RootUtils.execShell("chmod 777 " + tagFile.getPath());
+
         } catch (Throwable e) {
             CLog.e("initConfig error  " + e, e);
         }
