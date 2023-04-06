@@ -7,6 +7,8 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 
+import javax.security.auth.login.LoginException;
+
 /**
  * Created by Lyh on
  * 2019/10/28
@@ -83,6 +85,7 @@ public class RootUtils {
     }
 
     public static void execShell(String cmd){
+        CLog.e("execShell cmd -> "+cmd);
         Process process = null;
         DataOutputStream os = null;
         try {
@@ -92,7 +95,7 @@ public class RootUtils {
             os.writeBytes("exit\n");
             os.flush();
             int e = process.waitFor();
-            CLog.e("execShell process.waitFor "+e);
+            //CLog.e("execShell process.waitFor "+e);
         } catch (Exception e) {
             CLog.e("execShell get root error  " + e.getMessage());
         } finally {

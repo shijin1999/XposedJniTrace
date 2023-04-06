@@ -4,6 +4,7 @@ import static com.zhenxi.jnitrace.config.ConfigKey.CONFIG_JSON;
 import static com.zhenxi.jnitrace.config.ConfigKey.FILTER_LIST;
 import static com.zhenxi.jnitrace.config.ConfigKey.IS_LISTEN_TO_ALL;
 import static com.zhenxi.jnitrace.config.ConfigKey.IS_SERIALIZATION;
+import static com.zhenxi.jnitrace.config.ConfigKey.IS_SYSTEM_LOAD_INTO;
 import static com.zhenxi.jnitrace.config.ConfigKey.LIST_OF_FUNCTIONS;
 import static com.zhenxi.jnitrace.config.ConfigKey.MOUDLE_SO_PATH;
 import static com.zhenxi.jnitrace.config.ConfigKey.PACKAGE_NAME;
@@ -27,7 +28,6 @@ import org.json.JSONObject;
 import org.lsposed.hiddenapibypass.HiddenApiBypass;
 
 import java.io.File;
-import java.io.IOException;
 import java.util.ArrayList;
 
 import de.robv.android.xposed.IXposedHookLoadPackage;
@@ -35,6 +35,7 @@ import de.robv.android.xposed.IXposedHookZygoteInit;
 import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XSharedPreferences;
 import de.robv.android.xposed.XposedBridge;
+import de.robv.android.xposed.XposedHelpers;
 import de.robv.android.xposed.callbacks.XC_LoadPackage;
 
 
@@ -70,6 +71,7 @@ public class LHook implements IXposedHookLoadPackage, IXposedHookZygoteInit {
      */
     private static boolean isSerialization = false;
 
+    private static boolean isSystemLoadInto = false;
     /**
      * 是否监听全部的SO调用
      */
@@ -79,20 +81,10 @@ public class LHook implements IXposedHookLoadPackage, IXposedHookZygoteInit {
 
     private static final ArrayList<String> mFunctionList = new ArrayList<>();
 
-    /**
-     * start hook jni
-     *
-     * @param filterList   so name filter list
-     * @param functionList function list
-     * @param save_path    save file path ,when the null is not saved
-     */
-    public static native void startHookJni(boolean isHookAll,
-                                           ArrayList<String> filterList,
-                                           ArrayList<String> functionList,
-                                           String save_path);
-
 
     private static boolean isInit = false;
+
+    private static  Class<?> NativeEngineClazz = null;
 
     private void initConfigData(String configJson) {
         if (configJson == null || configJson.length() == 0 || configJson.equals(DEF_VALUE)) {
@@ -104,16 +96,16 @@ public class LHook implements IXposedHookLoadPackage, IXposedHookZygoteInit {
             mIntoSoPath = json.optString(MOUDLE_SO_PATH, DEF_VALUE);
             mSaveTime = json.optLong(SAVE_TIME, 0L);
             isSerialization = json.optBoolean(IS_SERIALIZATION, false);
-
+            isSystemLoadInto = json.optBoolean(IS_SYSTEM_LOAD_INTO, false);
             String functionList = json.optString(LIST_OF_FUNCTIONS, DEF_VALUE);
-            CLog.e("json get function list str info -> " + functionList);
+            //CLog.e("json get function list str info -> " + functionList);
             if (!functionList.equals(DEF_VALUE)) {
                 ArrayList<?> arrayList = GsonUtils.str2obj(functionList, ArrayList.class);
                 if (arrayList != null) {
                     CLog.e("function list get info -> " + arrayList);
                     for (Object obj : arrayList) {
                         String item = String.valueOf(obj);
-                        CLog.e("function list add  " + obj);
+                        //CLog.e("function list add  " + obj);
                         mFunctionList.add(item);
                     }
                 } else {
@@ -199,18 +191,36 @@ public class LHook implements IXposedHookLoadPackage, IXposedHookZygoteInit {
     private boolean isMatch(String packageName) {
         //包名匹配&&10分钟的有效期
         return packageName.equals(mTagPackageName);
-                //&& (System.currentTimeMillis() - mSaveTime) < (1000 * 60 * 10);
+        //&& (System.currentTimeMillis() - mSaveTime) < (1000 * 60 * 10);
     }
 
-    private void intoMySo(Context context) {
+    private Class<?> intoMySo(Context context, boolean isSystemLoadInto) {
         try {
             IntoMySoUtils.initMySoForName(context,
-                    "lib" + BuildConfig.project_name + ".so", LHook.class.getClassLoader(), mIntoSoPath);
-            CLog.i("init my so finish");
+                    "lib" + BuildConfig.project_name + ".so",
+                    isSystemLoadInto ? context.getClassLoader() : LHook.class.getClassLoader(),
+                    mIntoSoPath,
+                    isSystemLoadInto
+            );
+
+            //返回class提供给调用者使用 。
+            Class<?> clazz;
+            try {
+                clazz = XposedHelpers.findClass(
+                        "com.zhenxi.jnitrace.NativeEngine",
+                        isSystemLoadInto ? context.getClassLoader() : LHook.class.getClassLoader()
+                        );
+                CLog.i("init my so finish , get class success !");
+                return clazz;
+            } catch (Throwable e) {
+                CLog.e("callStartHookJni ");
+            }
         } catch (Throwable e) {
             CLog.e("initSo error " + e.getMessage());
             e.printStackTrace();
+            return null;
         }
+        return null;
     }
 
     @SuppressWarnings("all")
@@ -318,7 +328,11 @@ public class LHook implements IXposedHookLoadPackage, IXposedHookZygoteInit {
         } else {
             try {
                 //处理JNI监听
-                intoMySo(context);
+                NativeEngineClazz = intoMySo(context, isSystemLoadInto);
+                if (NativeEngineClazz == null) {
+                    CLog.e("intoMySo get clazz == null !");
+                    return;
+                }
                 File file = new File("/data/data/"
                         + mTagPackageName + "/(" + mProcessName + ")"
                         + (isListenAll ? "[ALL]" : mFilterList.toString()) + ".txt");
@@ -327,19 +341,37 @@ public class LHook implements IXposedHookLoadPackage, IXposedHookZygoteInit {
                 }
                 file.createNewFile();
                 CLog.i(">>>>>>>>>>> start hook jni " + file.getPath());
-                if(mFunctionList!=null&&mFunctionList.size() ==0){
-                    CLog.e("function list size == 0 !!!!!!!!!!!!!!!!! "+mProcessName);
-                    CLog.e("function list size == 0 !!!!!!!!!!!!!!!!! "+mTagPackageName);
+                if (mFunctionList != null && mFunctionList.size() == 0) {
+                    CLog.e("function list size == 0 !!!!!!!!!!!!!!!!! " + mProcessName);
+                    CLog.e("function list size == 0 !!!!!!!!!!!!!!!!! " + mTagPackageName);
                     CLog.e("function list size == 0 !!!!!!!!!!!!!!!!! ");
                     return;
                 }
                 //start hook native
-                startHookJni(isListenAll, mFilterList, mFunctionList, file.getPath());
+                callStartHookJni(NativeEngineClazz, isListenAll, file.getPath());
             } catch (Throwable e) {
                 CLog.e("into&hook jni error " + e);
             }
         }
         isInit = true;
+    }
+
+    private void callStartHookJni(Class<?> NativeEngineClazz, boolean isListenAll,
+                                  String path) {
+        if (NativeEngineClazz == null) {
+            return;
+        }
+        //startHookJni(isListenAll, mFilterList, mFunctionList, file.getPath());
+        try {
+            XposedHelpers.callStaticMethod(NativeEngineClazz,
+                    "startHookJni",
+                    isListenAll, LHook.mFilterList, LHook.mFunctionList, path
+            );
+        } catch (Throwable e) {
+            CLog.e("callStartHookJni error " + e);
+            return;
+        }
+        CLog.i("callStartHookJni success !");
     }
 
 

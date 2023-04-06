@@ -2,7 +2,9 @@ package com.zhenxi.jnitrace.adapter;
 
 import android.content.Context;
 import android.content.DialogInterface;
+import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageInfo;
+import android.content.pm.PackageManager;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -35,6 +37,8 @@ import static com.zhenxi.jnitrace.config.ConfigKey.CONFIG_JSON;
 import static com.zhenxi.jnitrace.config.ConfigKey.FILTER_LIST;
 import static com.zhenxi.jnitrace.config.ConfigKey.IS_LISTEN_TO_ALL;
 import static com.zhenxi.jnitrace.config.ConfigKey.IS_SERIALIZATION;
+import static com.zhenxi.jnitrace.config.ConfigKey.IS_SYSTEM_LOAD_INTO;
+import static com.zhenxi.jnitrace.config.ConfigKey.JNITRACE_DEX_NAME;
 import static com.zhenxi.jnitrace.config.ConfigKey.LIST_OF_FUNCTIONS;
 import static com.zhenxi.jnitrace.config.ConfigKey.MOUDLE_SO_PATH;
 import static com.zhenxi.jnitrace.config.ConfigKey.PACKAGE_NAME;
@@ -57,16 +61,17 @@ public class MainListViewAdapter extends BaseAdapter {
     private final Context mContext;
     private final CheckBox isSerialization;
 
-
+    private final CheckBox isSystemLoad;
     private AppBean mAppBean = null;
 
     public MainListViewAdapter(Context context,
                                ArrayList<AppBean> data,
-                               CheckBox info) {
+                               CheckBox isSerialization,
+                               CheckBox isSystemLoad) {
         this.mContext = context;
         this.data = data;
-        this.isSerialization = info;
-
+        this.isSerialization = isSerialization;
+        this.isSystemLoad = isSystemLoad;
     }
 
 
@@ -125,6 +130,7 @@ public class MainListViewAdapter extends BaseAdapter {
     private void showDialogForList(Context context) {
         View view = LayoutInflater.from(mContext).inflate(R.layout.dialog_input, null);
         EditText input = view.findViewById(R.id.ed_input);
+        input.setVisibility(View.GONE);
         JSONObject jsonObject = new JSONObject();
         ArrayList<String> filtersList = new ArrayList<>();
         ArrayList<String> functionsList = new ArrayList<>();
@@ -132,22 +138,20 @@ public class MainListViewAdapter extends BaseAdapter {
                 .setView(view)
                 .setPositiveButton("确定", (dialog, which) -> {
                     String inputStr = input.getText().toString();
-                    if (inputStr.length() == 0) {
-                        ToastUtils.showToast(context, "输入错误,未找到需要需要监听的SO信息");
-                        return;
-                    }
                     try {
                         if (inputStr.equals("ALL")) {
                             jsonObject.put(IS_LISTEN_TO_ALL, true);
                         } else {
                             jsonObject.put(IS_LISTEN_TO_ALL, false);
-                            String[] split = inputStr.split("\\|");
-                            CLog.e("input str msg -> " + Arrays.toString(split));
-                            filtersList.addAll(Arrays.asList(split));
-                            if (!isSerialization.isChecked()) {
-                                String listJsonStr = GsonUtils.obj2str(filtersList);
-                                CLog.e("filter list json -> " + listJsonStr);
-                                jsonObject.put(FILTER_LIST, listJsonStr);
+                            if (input.length() >= 1) {
+                                String[] split = inputStr.split("\\|");
+                                CLog.e("input str msg -> " + Arrays.toString(split));
+                                filtersList.addAll(Arrays.asList(split));
+                                if (!isSerialization.isChecked() && filtersList.size() >= 1) {
+                                    String listJsonStr = GsonUtils.obj2str(filtersList);
+                                    CLog.e("filter list json -> " + listJsonStr);
+                                    jsonObject.put(FILTER_LIST, listJsonStr);
+                                }
                             }
                         }
                         String functionsStr = GsonUtils.obj2str(functionsList);
@@ -167,9 +171,15 @@ public class MainListViewAdapter extends BaseAdapter {
                 })
                 .setMultiChoiceItems(items, null, (dialog, which, isChecked) -> {
                     if (isChecked) {
-                        functionsList.add(which+"");
+                        functionsList.add(which + "");
+                        if (which == 0 || which == 1) {
+                            input.setVisibility(View.VISIBLE);
+                        }
                     } else {
-                        functionsList.remove(which+"");
+                        functionsList.remove(which + "");
+                        if (which == 0 || which == 1) {
+                            input.setVisibility(View.GONE);
+                        }
                     }
                     CLog.e("functions list " + functionsList);
                 })
@@ -196,6 +206,8 @@ public class MainListViewAdapter extends BaseAdapter {
         }
         try {
             jsonObject.put(PACKAGE_NAME, bean.packageName);
+            jsonObject.put(IS_SYSTEM_LOAD_INTO, isSystemLoad.isChecked());
+
             try {
                 PackageInfo packageInfo =
                         mContext.getPackageManager().getPackageInfo(BuildConfig.APPLICATION_ID, 0);
@@ -229,20 +241,40 @@ public class MainListViewAdapter extends BaseAdapter {
     @SuppressWarnings("All")
     private void initConfig(String packageName, JSONObject jsonObject) {
         try {
-            File config = new File("/data/data/"
-                    + BuildConfig.APPLICATION_ID + "/" + BuildConfig.project_name + "Config");
+            if (isSystemLoad.isChecked()) {
+                String intoLib = null;
+                ApplicationInfo my_apk_info = mContext.getApplicationInfo();
+                intoLib = my_apk_info.nativeLibraryDir + "/lib" + BuildConfig.project_name + ".so";
+                CLog.i("systemload into so path -> " + intoLib);
+                try {
+                    PackageManager packageManager = mContext.getPackageManager();
+                    ApplicationInfo tag_apk_info = packageManager.getApplicationInfo(packageName, 0);
+                    String libDir = tag_apk_info.nativeLibraryDir;
+                    CLog.i("systemload load so path -> " + libDir);
+                    RootUtils.execShell("mv -f " + intoLib + " " + libDir);
+
+                    CLog.e("systemload mv success  !!!");
+                } catch (Throwable e) {
+                    CLog.e("get tag getApplicationInfo error " + e);
+                }
+            }
+
+            File jnitraceModleData
+                    = new File("/data/data/" + BuildConfig.APPLICATION_ID);
+
+            File config = new File(jnitraceModleData, BuildConfig.project_name + "Config");
             CLog.e("temp config file path " + config.getPath());
             if (config.exists()) {
                 boolean delete = config.delete();
                 if (!delete) {
-                    CLog.e("delete org config file error ,start root delete "+config.getPath());
-                    RootUtils.execShell("mv -f " + config.getPath());
+                    CLog.e("delete org config file error ,start root delete " + config.getPath());
+                    RootUtils.execShell("rm -f " + config.getPath());
                 }
             }
             FileUtils.makeSureDirExist(config.getParentFile());
             boolean configNewFile = config.createNewFile();
-            if(!configNewFile){
-                CLog.e(">>>>>>>>>>> create temp config file error "+config.getPath());
+            if (!configNewFile) {
+                CLog.e(">>>>>>>>>>> create temp config file error " + config.getPath());
                 return;
             }
             config.setExecutable(true, false);
@@ -252,19 +284,37 @@ public class MainListViewAdapter extends BaseAdapter {
             FileUtils.saveString(config, jsonObject.toString());
 
             File temp = new File("/data/data/" + packageName);
-            File tagFile = new File(temp.getPath() + "/" + BuildConfig.project_name + "Config");
-            if(tagFile.exists()){
-                RootUtils.execShell("rm -f " + tagFile.getPath());
-                CLog.i(">>>>>>>> initConfig rm -f finish  "+tagFile.getPath());
+            File tagConfigFile = new File(temp, BuildConfig.project_name + "Config");
+            if (tagConfigFile.exists()) {
+                RootUtils.execShell("rm -f " + tagConfigFile.getPath());
+                CLog.i(">>>>>>>> initConfig rm -f finish  " + tagConfigFile.getPath());
             }
+            File tagDexFile = new File(temp, JNITRACE_DEX_NAME);
+            if (tagDexFile.exists()) {
+                RootUtils.execShell("rm -f " + tagDexFile.getPath());
+                CLog.i(">>>>>>>> initConfig rm -f finish  " + tagDexFile.getPath());
+            }
+
             CLog.i(">>>>>>>>> start mv " +
                     "file " + config.getPath() + "->" + temp);
             //强制覆盖
             RootUtils.execShell("mv -f " + config.getPath() + " " + temp);
-            //防止因为用户组权限问题导致open failed: EACCES (Permission denied)
-            CLog.i(">>>>>>>>>> chmod 777 path -> " + tagFile);
-            RootUtils.execShell("chmod 777 " + tagFile.getPath());
 
+            //asset release
+            File dexFile =
+                    FileUtils.extractAssetFile(mContext, JNITRACE_DEX_NAME
+                            , jnitraceModleData.getPath());
+            if (!dexFile.exists()) {
+                CLog.i(">>>>>>>> JnitraceDex.dex  release error " + dexFile.getPath());
+                return;
+            }
+
+            RootUtils.execShell("mv -f " + dexFile.getPath() + " " + temp);
+
+            //防止因为用户组权限问题导致open failed: EACCES (Permission denied)
+            CLog.i(">>>>>>>>>> chmod 777 path -> " + tagConfigFile + " " + dexFile);
+            RootUtils.execShell("chmod 777 " + tagConfigFile.getPath());
+            RootUtils.execShell("chmod 777 " + tagDexFile.getPath());
         } catch (Throwable e) {
             CLog.e("initConfig error  " + e, e);
         }

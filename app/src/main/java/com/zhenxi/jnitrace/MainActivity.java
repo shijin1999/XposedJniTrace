@@ -23,7 +23,6 @@ import androidx.appcompat.app.AppCompatActivity;
 import com.google.android.material.snackbar.Snackbar;
 import com.zhenxi.jnitrace.bean.AppBean;
 import com.zhenxi.jnitrace.adapter.MainListViewAdapter;
-import com.zhenxi.jnitrace.utils.CLog;
 import com.zhenxi.jnitrace.utils.PermissionUtils;
 import com.zhenxi.jnitrace.utils.ToastUtils;
 import com.zhenxi.jnitrace.view.Xiaomiquan;
@@ -36,10 +35,8 @@ import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
 
-    private ListView mLv_list;
     private ArrayList<AppBean> mAllPackageList = new ArrayList<>();
     private final ArrayList<AppBean> mCommonPackageList = new ArrayList<>();
-    private Toolbar mToolbar;
 
     private final String[] permissionList = {
             Manifest.permission.READ_EXTERNAL_STORAGE,
@@ -51,8 +48,7 @@ public class MainActivity extends AppCompatActivity {
 
     private CheckBox mCb_checkbox;
     private CheckBox mCb_IsSerialization;
-    private CheckBox misPassRoot;
-    private ImageView search;
+    private CheckBox mCb_IsSystemLoad;
     private MainListViewAdapter mMainListViewAdapter;
 
 
@@ -98,9 +94,9 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void initView() {
-        mLv_list = findViewById(R.id.lv_list);
+        ListView lv_list = findViewById(R.id.lv_list);
 
-        mToolbar = findViewById(R.id.tb_toolbar);
+        Toolbar toolbar = findViewById(R.id.tb_toolbar);
 
         mCb_checkbox = findViewById(R.id.cb_checkbox);
         mCb_IsSerialization = findViewById(R.id.cb_invoke);
@@ -111,16 +107,17 @@ public class MainActivity extends AppCompatActivity {
             mCb_IsSerialization.setVisibility(View.GONE);
         }
 
-        misPassRoot = findViewById(R.id.cb_isPassRoot);
+        mCb_IsSystemLoad = findViewById(R.id.cb_isSystemLoad);
         mCb_IsSerialization.setOnClickListener(v -> {
             if (mCb_IsSerialization.isChecked()) {
                 showDialog();
             }
         });
-        search = findViewById(R.id.iv_search);
+        ImageView search = findViewById(R.id.iv_search);
 
         mMainListViewAdapter =
-                new MainListViewAdapter(this,mCommonPackageList, mCb_IsSerialization);
+                new MainListViewAdapter(this,
+                        mCommonPackageList, mCb_IsSerialization,mCb_IsSystemLoad);
 
         mCb_checkbox.setOnCheckedChangeListener((buttonView, isChecked) -> {
             if (isChecked) {
@@ -132,11 +129,11 @@ public class MainActivity extends AppCompatActivity {
         });
 
 
-        mToolbar.setTitle("");
+        toolbar.setTitle("");
 
-        mToolbar.inflateMenu(R.menu.main_activity);
+        toolbar.inflateMenu(R.menu.main_activity);
 
-        mToolbar.setOnMenuItemClickListener(item -> {
+        toolbar.setOnMenuItemClickListener(item -> {
             if (item.getItemId() == R.id.xiaomiquan) {
                 xiaomiquan();
             } else if (item.getItemId() == R.id.kecheng) {
@@ -199,7 +196,7 @@ public class MainActivity extends AppCompatActivity {
 
         });
         search.setOnClickListener(v -> searchFragment.showFragment(getSupportFragmentManager(), SearchFragment.TAG));
-        mLv_list.setAdapter(mMainListViewAdapter);
+        lv_list.setAdapter(mMainListViewAdapter);
         mMainListViewAdapter.notifyDataSetChanged();
 
     }

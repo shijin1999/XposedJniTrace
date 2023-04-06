@@ -38,16 +38,15 @@
                 android:textSize="13sp"
                  />
             <CheckBox
-                android:id="@+id/cb_isPassRoot"
+                android:id="@+id/cb_isSystemLoad"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layoutDirection="rtl"
-                android:text="反制Root检测"
+                android:text="loadlib注入"
                 android:textColor="#fff"
-                android:textSize="13sp"
-                android:visibility="gone" />
+                android:textSize="13sp"/>
+
             <ImageView
-                android:layout_marginRight="20dp"
                 android:id="@+id/iv_search"
                 android:layout_width="30dp"
                 android:layout_height="30dp"
