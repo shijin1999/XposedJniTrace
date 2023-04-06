@@ -29,6 +29,7 @@ import org.lsposed.hiddenapibypass.HiddenApiBypass;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Objects;
 
 import de.robv.android.xposed.IXposedHookLoadPackage;
 import de.robv.android.xposed.IXposedHookZygoteInit;
@@ -60,6 +61,13 @@ public class LHook implements IXposedHookLoadPackage, IXposedHookZygoteInit {
      * 进程名字
      */
     private static String mProcessName = null;
+
+    /**
+     * 保存当前进程的classloader,在apk没加载的时候,手动去调用
+     * context.getClassLoader()程序会进入阻塞状态,原因未知。
+     */
+    private static ClassLoader mProcessClazzLoader = null;
+
     /**
      * 注入模块的so文件路径
      */
@@ -137,7 +145,7 @@ public class LHook implements IXposedHookLoadPackage, IXposedHookZygoteInit {
     @SuppressWarnings("all")
     public void handleLoadPackage(XC_LoadPackage.LoadPackageParam loadPackageParam) throws Throwable {
         mProcessName = loadPackageParam.processName;
-
+        mProcessClazzLoader = loadPackageParam.classLoader;
         try {
             String configJson = DEF_VALUE;
             try {
@@ -179,7 +187,12 @@ public class LHook implements IXposedHookLoadPackage, IXposedHookZygoteInit {
                 CLog.e("find tag app ->  " + loadPackageParam.packageName);
                 CLog.i("[" + mTagPackageName + "]init config success ! isSerialization -> "
                         + isSerialization + "  into so path -> " + mIntoSoPath + " is hook all -> " + isListenAll);
+                CLog.e("LHook classloader "+LHook.class.getClassLoader()+" "+LHook.class.getClassLoader().hashCode());
+                CLog.e("LHook loadPackageParam.classLoader "
+                        +loadPackageParam.classLoader+" "+loadPackageParam.classLoader.hashCode());
+
                 startInit();
+
             }
         } catch (Throwable e) {
             e.printStackTrace();
@@ -196,27 +209,45 @@ public class LHook implements IXposedHookLoadPackage, IXposedHookZygoteInit {
 
     private Class<?> intoMySo(Context context, boolean isSystemLoadInto) {
         try {
+
+            if(context == null){
+                CLog.e("intoMySo context == null ");
+                return null;
+            }
+            ClassLoader classloader = null;
+            try {
+                classloader = isSystemLoadInto ? mProcessClazzLoader : Objects.requireNonNull(LHook.class.getClassLoader());
+                if(classloader == null){
+                    CLog.i("intoMySo classloader == null "+isSystemLoadInto);
+                    return null;
+                }
+            } catch (Exception e) {
+                CLog.e("intoMySo get classloader error  "+e,e);
+            }
+            if(classloader == null){
+                CLog.e("classloader == null error  ");
+                return null;
+            }
             IntoMySoUtils.initMySoForName(context,
                     "lib" + BuildConfig.project_name + ".so",
-                    isSystemLoadInto ? context.getClassLoader() : LHook.class.getClassLoader(),
+                    classloader,
                     mIntoSoPath,
                     isSystemLoadInto
             );
-
             //返回class提供给调用者使用 。
             Class<?> clazz;
             try {
                 clazz = XposedHelpers.findClass(
                         "com.zhenxi.jnitrace.NativeEngine",
-                        isSystemLoadInto ? context.getClassLoader() : LHook.class.getClassLoader()
+                        isSystemLoadInto ? mProcessClazzLoader : LHook.class.getClassLoader()
                         );
                 CLog.i("init my so finish , get class success !");
                 return clazz;
             } catch (Throwable e) {
-                CLog.e("callStartHookJni ");
+                CLog.e("callStartHookJni "+e,e);
             }
         } catch (Throwable e) {
-            CLog.e("initSo error " + e.getMessage());
+            CLog.e("initSo error " + e,e);
             e.printStackTrace();
             return null;
         }
@@ -326,6 +357,7 @@ public class LHook implements IXposedHookLoadPackage, IXposedHookZygoteInit {
             CLog.e(">>>>>>>>>>>>>>>>> start mem serialization !!!!!");
             startSerialization(context);
         } else {
+            CLog.e(">>>>>>>>>>>>>>> start into my so ,is system.load ["+isSystemLoadInto+"] <<<<<<<<<<<<<<<<<");
             try {
                 //处理JNI监听
                 NativeEngineClazz = intoMySo(context, isSystemLoadInto);
@@ -333,6 +365,8 @@ public class LHook implements IXposedHookLoadPackage, IXposedHookZygoteInit {
                     CLog.e("intoMySo get clazz == null !");
                     return;
                 }
+                CLog.e(">>>>>>>>>>>>>>>  into my finish  <<<<<<<<<<<<<<<<<");
+
                 File file = new File("/data/data/"
                         + mTagPackageName + "/(" + mProcessName + ")"
                         + (isListenAll ? "[ALL]" : mFilterList.toString()) + ".txt");
@@ -349,8 +383,9 @@ public class LHook implements IXposedHookLoadPackage, IXposedHookZygoteInit {
                 }
                 //start hook native
                 callStartHookJni(NativeEngineClazz, isListenAll, file.getPath());
-            } catch (Throwable e) {
-                CLog.e("into&hook jni error " + e);
+            }
+            catch (Throwable e) {
+                CLog.e("into&hook jni error " + e,e);
             }
         }
         isInit = true;

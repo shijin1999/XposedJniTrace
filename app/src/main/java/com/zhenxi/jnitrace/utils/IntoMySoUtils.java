@@ -75,7 +75,7 @@ public class IntoMySoUtils {
         if (classLoader == null) {
             return null;
         }
-        CLog.e("getClassLoaderElements class loader name " + classLoader);
+        //CLog.e("getClassLoaderElements class loader name " + classLoader);
         try {
             Field pathListField = getPathListField(classLoader);
             if (pathListField != null) {
@@ -126,20 +126,40 @@ public class IntoMySoUtils {
                 CLog.e("SetDexElements  get pathList == null");
             }
         } catch (Throwable e) {
-            CLog.e("SetDexElements  NoSuchFieldException   " + e.getMessage());
-            e.printStackTrace();
+            CLog.e("SetDexElements  NoSuchFieldException   " + e,e);
         }
         return false;
     }
 
     /**
-     * So的 名字 比如 libLVmp.so
+     * 1,初始化我们的SO,加载到被Hook的内存里 。
+     *
+     * 支持两种加载方式:
+     * 1,使用system.loadlib注入,这种方式需要先将so文件导入到/data/app/包名/lib/下面。
+     * 直接system.load注入,这时候注入的classloader和正常apk层级的classloader是一样的。
+     * 和apk直接加载so是一样的,不存在作用域问题。
+     * 这种方法更适用于hook apk里面so的逻辑,因为作用域是一样的。
+     *
+     *
+     * 2,使用LoadSoForPath()方法去加载,这时候的classloader用的是xposed模块的classloader 。
+     * 这时候有个弊端,就是遍历maps的时候,只能拿到当前classloader里面的so文件。比如Lsp的so文件
+     * 拿不到apk本身的so文件,因为classloader的作用域不同 。
+     * 这种方法更适用于hook系统api,系统api是公用的,不存在作用域问题。
+     *
+     * 但是如果只是Hook 系统api 两种方式区别不是很大 。反而第2种更隐藏。
+     *
+     * 这块还有一个细节,native方法如何注册的问题。
+     * 如果这个native方法写在xposed模块里面,就只能通过第二种方式去加载。
+     * 使用第一种会报错,所以干脆直接将native方法搞成dex文件。
+     * 哪个classloader用于加载,就往哪个classloader的作用域里面去加。这样可以同时支持1&2两种方法
+     *
      */
     public static void initMySoForName(Context context,
                                        String name,
                                        ClassLoader so_classloader,
                                        String mIntoSoPath,
                                        boolean isSystemLoad) {
+        CLog.i("start initMySoForName "+name+" ["+so_classloader.getClass().getName()+"]");
         DexClassLoader classLoader = null;
         try {
             try {
@@ -157,34 +177,30 @@ public class IntoMySoUtils {
             //将两个classloader进行合并,方便native层进行查找 。
             //将宿主的classloader里面填充我们注入native的method
             Object[] MyDexClassloader = getClassLoaderElements(so_classloader);
-            if (MyDexClassloader == null) {
+            if (MyDexClassloader == null||MyDexClassloader.length == 0) {
                 CLog.e("get MyDexClassloader Elements == null");
                 return;
             }
             Object[] otherClassloader = getClassLoaderElements(classLoader);
-            if (otherClassloader == null) {
+            if (otherClassloader == null||otherClassloader.length == 0) {
                 CLog.e("get otherClassloader Elements == null");
                 return;
             }
             try {
                 CLog.e("get classloader Elements success !");
                 Object[] combined =
-                        (Object[]) Array.newInstance(
-                                otherClassloader.getClass().getComponentType(),
-                        MyDexClassloader.length + otherClassloader.length);
-
+                        (Object[]) Array.newInstance(otherClassloader.getClass().getComponentType(),
+                                MyDexClassloader.length + otherClassloader.length);
                 //将自己classloader 数组的内容 放到 前面位置
                 System.arraycopy(MyDexClassloader, 0, combined, 0, MyDexClassloader.length);
                 System.arraycopy(otherClassloader, 0, combined, MyDexClassloader.length, otherClassloader.length);
+                CLog.i("System.arraycopy finish ");
                 if ((MyDexClassloader.length +
                         otherClassloader.length) != combined.length) {
                     CLog.e("merge elements size error ");
                     return;
                 }
-                //将 生成的 classloader进行 set回原来的 element数组
-                if (SetDexElements(combined,
-                        MyDexClassloader.length + otherClassloader.length,
-                        context.getClassLoader())) {
+                if (SetDexElements(combined,MyDexClassloader.length + otherClassloader.length,so_classloader)) {
                     CLog.i("merge classloader success !");
                 } else {
                     CLog.e("merge classloader fail ");
@@ -192,9 +208,10 @@ public class IntoMySoUtils {
             } catch (Throwable e) {
                 CLog.e("merge classloader error " + e,e);
             }
-
+            CLog.i(">>>>>>>>>>>>>>>>> merge classloader finish ");
             if (isSystemLoad) {
-                CLog.i("initMySoForName load so model is -> System.load ");
+                CLog.i("initMySoForName load so model is -> [System.loadLibrary()] ");
+                //todo 防止没有在组件库里面添加lib目录,手动添加一下 。
                 try {
                     System.loadLibrary(BuildConfig.project_name);
                 } catch (Throwable e) {
@@ -210,7 +227,6 @@ public class IntoMySoUtils {
             } else {
                 CLog.e(">>>>>>>>>>>>>  not found into so path -> " + name);
             }
-            return;
         } catch (Throwable e) {
             CLog.e("initMySo error,start printf " + e.getMessage() + " " + e.getLocalizedMessage());
             Log.getStackTraceString(e);
@@ -219,7 +235,6 @@ public class IntoMySoUtils {
                 CLog.e(element.toString());
             }
         }
-        return;
     }
 
 
