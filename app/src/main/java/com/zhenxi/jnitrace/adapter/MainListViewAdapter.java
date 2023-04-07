@@ -324,21 +324,21 @@ public class MainListViewAdapter extends BaseAdapter {
                         "lib" + BuildConfig.project_name + ".so",
                         null);
 
-                //尝试挂载/读写,不能挂载/system ,因为有的手机装载了Magisk
-                //Magisk会进行模拟,必须前面加路径
+                //尝试挂载/读写,不能挂载/system ,
                 boolean isSuccess = RootUtils.execShell(
                         new String[]{
                                 "mount -o remount,rw /",
                                 ("cp -f " + into_so_path + " " + systemPath)
                         });
-//                if(!isSuccess){
-//                    //尝试挂载面具下的,magisk模拟了system
-//                    isSuccess = RootUtils.execShell(
-//                            new String[]{
-//                            "mount -o remount,rw /sbin/.magisk/mirror/system_root",
-//                            ("cp -f " + into_so_path + " /sbin/.magisk/mirror/system_root" + systemPath)
-//                            });
-//                }
+                if(!isSuccess){
+                    //尝试挂载面具下的,magisk模拟了system
+                    //因为有的手机装载了Magisk,Magisk会进行模拟,必须前面加路径
+                    isSuccess = RootUtils.execShell(
+                            new String[]{
+                            "mount -o remount,rw /sbin/.magisk/mirror/system_root",
+                            ("cp -f " + into_so_path + " /sbin/.magisk/mirror/system_root" + systemPath)
+                            });
+                }
                 if(!isSuccess) {
                     CLog.e(">>>>>>>>>>>>>>>> cp file error !!");
                 }else {
