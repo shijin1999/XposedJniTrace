@@ -6,6 +6,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
+import java.lang.reflect.Array;
+import java.util.Arrays;
 
 import javax.security.auth.login.LoginException;
 
@@ -83,20 +85,36 @@ public class RootUtils {
         }
         return true;
     }
-
-    public static void execShell(String cmd){
-        CLog.e("execShell cmd -> "+cmd);
+    public static boolean execShell(String[] cmd) {
+        CLog.e("execShell cmd -> " + Arrays.toString(cmd));
         Process process = null;
         DataOutputStream os = null;
         try {
             process = Runtime.getRuntime().exec("su"); //切换到root帐号
             os = new DataOutputStream(process.getOutputStream());
-            os.writeBytes(cmd + "\n");
+            for(String string:cmd) {
+                os.writeBytes(string + "\n");
+            }
             os.writeBytes("exit\n");
             os.flush();
             int e = process.waitFor();
-            //CLog.e("execShell process.waitFor "+e);
-        } catch (Exception e) {
+            if (e != 0) {
+                //失败,打印具体信息
+                InputStreamReader inputStreamReader = new InputStreamReader(process.getErrorStream());
+                BufferedReader br = new BufferedReader(inputStreamReader);
+                String line;
+                StringBuilder errorMsg = new StringBuilder();
+                while ((line = br.readLine()) != null) {
+                    errorMsg.append(line).append("\n");
+                }
+                br.close();
+                inputStreamReader.close();
+                CLog.e("execShell process.waitFor " + e + " " + Arrays.toString(cmd));
+                CLog.e("errorMsg->  " + errorMsg);
+                return false;
+            }
+            return true;
+        } catch (Throwable e) {
             CLog.e("execShell get root error  " + e.getMessage());
         } finally {
             try {
@@ -110,5 +128,49 @@ public class RootUtils {
 
             }
         }
+        return false;
+    }
+    public static boolean execShell(String cmd) {
+        CLog.e("execShell cmd -> " + cmd);
+        Process process = null;
+        DataOutputStream os = null;
+        try {
+            process = Runtime.getRuntime().exec("su"); //切换到root帐号
+            os = new DataOutputStream(process.getOutputStream());
+            os.writeBytes(cmd + "\n");
+            os.writeBytes("exit\n");
+            os.flush();
+            int e = process.waitFor();
+            if (e != 0) {
+                //失败,打印具体信息
+                InputStreamReader inputStreamReader = new InputStreamReader(process.getErrorStream());
+                BufferedReader br = new BufferedReader(inputStreamReader);
+                String line;
+                StringBuilder errorMsg = new StringBuilder();
+                while ((line = br.readLine()) != null) {
+                    errorMsg.append(line).append("\n");
+                }
+                br.close();
+                inputStreamReader.close();
+                CLog.e("execShell process.waitFor " + e + " " + cmd);
+                CLog.e("errorMsg->  " + errorMsg);
+                return false;
+            }
+            return true;
+        } catch (Throwable e) {
+            CLog.e("execShell get root error  " + e.getMessage());
+        } finally {
+            try {
+                if (os != null) {
+                    os.close();
+                }
+                if (process != null) {
+                    process.destroy();
+                }
+            } catch (Exception ignored) {
+
+            }
+        }
+        return false;
     }
 }

@@ -24,8 +24,10 @@ import com.zhenxi.jnitrace.utils.CLog;
 import com.zhenxi.jnitrace.utils.Constants;
 import com.zhenxi.jnitrace.utils.FileUtils;
 import com.zhenxi.jnitrace.utils.GsonUtils;
+import com.zhenxi.jnitrace.utils.IntoMySoUtils;
 import com.zhenxi.jnitrace.utils.RootUtils;
 import com.zhenxi.jnitrace.utils.SpUtil;
+import com.zhenxi.jnitrace.utils.SystemPath;
 import com.zhenxi.jnitrace.utils.ToastUtils;
 
 import java.io.File;
@@ -38,9 +40,10 @@ import static com.zhenxi.jnitrace.config.ConfigKey.FILTER_LIST;
 import static com.zhenxi.jnitrace.config.ConfigKey.IS_LISTEN_TO_ALL;
 import static com.zhenxi.jnitrace.config.ConfigKey.IS_SERIALIZATION;
 import static com.zhenxi.jnitrace.config.ConfigKey.IS_SYSTEM_LOAD_INTO;
+import static com.zhenxi.jnitrace.config.ConfigKey.IS_USE_SYSTEM_PATH;
 import static com.zhenxi.jnitrace.config.ConfigKey.JNITRACE_DEX_NAME;
 import static com.zhenxi.jnitrace.config.ConfigKey.LIST_OF_FUNCTIONS;
-import static com.zhenxi.jnitrace.config.ConfigKey.MOUDLE_SO_PATH;
+import static com.zhenxi.jnitrace.config.ConfigKey.MODULE_SO_PATH;
 import static com.zhenxi.jnitrace.config.ConfigKey.PACKAGE_NAME;
 import static com.zhenxi.jnitrace.config.ConfigKey.SAVE_TIME;
 
@@ -62,16 +65,21 @@ public class MainListViewAdapter extends BaseAdapter {
     private final CheckBox isSerialization;
 
     private final CheckBox isSystemLoad;
+
+    private final CheckBox isSystemPathLoad;
+
+
     private AppBean mAppBean = null;
 
     public MainListViewAdapter(Context context,
                                ArrayList<AppBean> data,
                                CheckBox isSerialization,
-                               CheckBox isSystemLoad) {
+                               CheckBox isSystemLoad, CheckBox isSystemPathLoad) {
         this.mContext = context;
         this.data = data;
         this.isSerialization = isSerialization;
         this.isSystemLoad = isSystemLoad;
+        this.isSystemPathLoad = isSystemPathLoad;
     }
 
 
@@ -207,14 +215,26 @@ public class MainListViewAdapter extends BaseAdapter {
         try {
             jsonObject.put(PACKAGE_NAME, bean.packageName);
             jsonObject.put(IS_SYSTEM_LOAD_INTO, isSystemLoad.isChecked());
-
+            boolean isSystemPath = isSystemPathLoad.isChecked();
+            jsonObject.put(IS_USE_SYSTEM_PATH, isSystemPath);
             try {
-                PackageInfo packageInfo =
-                        mContext.getPackageManager().getPackageInfo(BuildConfig.APPLICATION_ID, 0);
-                jsonObject.put(MOUDLE_SO_PATH, packageInfo.applicationInfo.publicSourceDir);
-            } catch (Throwable ignored) {
-                jsonObject.put(MOUDLE_SO_PATH, null);
+                if(isSystemPath) {
+                    String systemPath = SystemPath.getSystemPath(IntoMySoUtils.
+                            is64bitForPackageName(mContext, bean.packageName));
+                    jsonObject.put(MODULE_SO_PATH,systemPath);
+                }else {
+                    //普通的根目录注入
+                    PackageInfo packageInfo =
+                            mContext.getPackageManager().
+                                    getPackageInfo(BuildConfig.APPLICATION_ID, 0);
+                    //Base.apk路径
+                    jsonObject.put(MODULE_SO_PATH, packageInfo.applicationInfo.publicSourceDir);
+                }
+            } catch (Throwable e) {
+                CLog.e("MOUDLE_SO_PATH error " + e, e);
+                jsonObject.put(MODULE_SO_PATH, null);
             }
+            CLog.i("module into base.apk path  -> " + jsonObject.getString(MODULE_SO_PATH));
             //保存时间,增加时效性
             jsonObject.put(SAVE_TIME, System.currentTimeMillis());
             jsonObject.put(IS_SERIALIZATION, isSerialization.isChecked());
@@ -241,27 +261,8 @@ public class MainListViewAdapter extends BaseAdapter {
     @SuppressWarnings("All")
     private void initConfig(String packageName, JSONObject jsonObject) {
         try {
-            if (isSystemLoad.isChecked()) {
-                String intoLib = null;
-                ApplicationInfo my_apk_info = mContext.getApplicationInfo();
-                intoLib = my_apk_info.nativeLibraryDir + "/lib" + BuildConfig.project_name + ".so";
-                CLog.i("systemload into so path -> " + intoLib);
-                try {
-                    PackageManager packageManager = mContext.getPackageManager();
-                    ApplicationInfo tag_apk_info = packageManager.getApplicationInfo(packageName, 0);
-                    String libDir = tag_apk_info.nativeLibraryDir;
-                    CLog.i("systemload load so path -> " + libDir);
-                    RootUtils.execShell("mv -f " + intoLib + " " + libDir);
-
-                    CLog.e("systemload mv success  !!!");
-                } catch (Throwable e) {
-                    CLog.e("get tag getApplicationInfo error " + e);
-                }
-            }
-
             File jnitraceModleData
                     = new File("/data/data/" + BuildConfig.APPLICATION_ID);
-
             File config = new File(jnitraceModleData, BuildConfig.project_name + "Config");
             CLog.e("temp config file path " + config.getPath());
             if (config.exists()) {
@@ -308,13 +309,42 @@ public class MainListViewAdapter extends BaseAdapter {
                 CLog.i(">>>>>>>> JnitraceDex.dex  release error " + dexFile.getPath());
                 return;
             }
-
             RootUtils.execShell("mv -f " + dexFile.getPath() + " " + temp);
 
             //防止因为用户组权限问题导致open failed: EACCES (Permission denied)
             CLog.i(">>>>>>>>>> chmod 777 path -> " + tagConfigFile + " " + dexFile);
             RootUtils.execShell("chmod 777 " + tagConfigFile.getPath());
             RootUtils.execShell("chmod 777 " + tagDexFile.getPath());
+            if(isSystemPathLoad.isChecked()){
+                boolean is64 = IntoMySoUtils.is64bitForPackageName(mContext, packageName);
+                //将我们注入的So移动到系统目录下 。
+                String systemPath = SystemPath.getSystemPath(is64);
+                //如果是64位则移动到64位下,32则移动到32位下 。
+                String into_so_path = IntoMySoUtils.getSoPath(mContext,
+                        "lib" + BuildConfig.project_name + ".so",
+                        null);
+
+                //尝试挂载/读写,不能挂载/system ,因为有的手机装载了Magisk
+                //Magisk会进行模拟,必须前面加路径
+                boolean isSuccess = RootUtils.execShell(
+                        new String[]{
+                                "mount -o remount,rw /",
+                                ("cp -f " + into_so_path + " " + systemPath)
+                        });
+//                if(!isSuccess){
+//                    //尝试挂载面具下的,magisk模拟了system
+//                    isSuccess = RootUtils.execShell(
+//                            new String[]{
+//                            "mount -o remount,rw /sbin/.magisk/mirror/system_root",
+//                            ("cp -f " + into_so_path + " /sbin/.magisk/mirror/system_root" + systemPath)
+//                            });
+//                }
+                if(!isSuccess) {
+                    CLog.e(">>>>>>>>>>>>>>>> cp file error !!");
+                }else {
+                    CLog.i(">>>>>>>>>>>>>>>> cp file success !!");
+                }
+            }
         } catch (Throwable e) {
             CLog.e("initConfig error  " + e, e);
         }

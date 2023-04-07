@@ -15,8 +15,9 @@ public class ConfigKey {
 
     /**
      * 注入模块So的Path
+     * 主要是我们自己模块的Base.apk的路径
      */
-    public static final String MOUDLE_SO_PATH="MOUDLE_SO_PATH";
+    public static final String MODULE_SO_PATH="MODULE_SO_PATH";
 
     /**
      * 选择Apk的时间,十分钟有效
@@ -59,4 +60,14 @@ public class ConfigKey {
      * 单独剥离出来成为一个Dex , 在Apk加载的时候根据传入的Classloader加载Dex进行注入和Native方法的注册 。
      */
     public static final String JNITRACE_DEX_NAME = "JnitraceDex.dex";
+
+    /**
+     * 正常我们将模块的So进行注入,是将So移动到被Hook apk的沙箱目录,然后进行注入 。
+     * 比如/data/data/被HookApp/FunJnilib.so 将这个So进行注入 。
+     * 在Maps里面可以看到这个So的路径。
+     * 我们可以我们的So移动到系统目录下,比如 。
+     * System/lib64/FunJnilib.so
+     * 这样maps里面看到的我们注入的So在系统目录下。以逃避检测。
+     */
+    public static final String IS_USE_SYSTEM_PATH = "IS_USE_SYSTEM_PATH";
 }

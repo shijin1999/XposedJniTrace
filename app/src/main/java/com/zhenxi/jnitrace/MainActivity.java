@@ -48,7 +48,6 @@ public class MainActivity extends AppCompatActivity {
 
     private CheckBox mCb_checkbox;
     private CheckBox mCb_IsSerialization;
-    private CheckBox mCb_IsSystemLoad;
     private MainListViewAdapter mMainListViewAdapter;
 
 
@@ -107,17 +106,21 @@ public class MainActivity extends AppCompatActivity {
             mCb_IsSerialization.setVisibility(View.GONE);
         }
 
-        mCb_IsSystemLoad = findViewById(R.id.cb_isSystemLoad);
+        CheckBox cb_IsContextClassloader = findViewById(R.id.cb_isUserContextLoader);
         mCb_IsSerialization.setOnClickListener(v -> {
             if (mCb_IsSerialization.isChecked()) {
                 showDialog();
             }
         });
+
+        CheckBox cb_isSystemPath = findViewById(R.id.cb_isSystemPath);
+
         ImageView search = findViewById(R.id.iv_search);
 
         mMainListViewAdapter =
                 new MainListViewAdapter(this,
-                        mCommonPackageList, mCb_IsSerialization,mCb_IsSystemLoad);
+                        mCommonPackageList, mCb_IsSerialization,
+                        cb_IsContextClassloader,cb_isSystemPath);
 
         mCb_checkbox.setOnCheckedChangeListener((buttonView, isChecked) -> {
             if (isChecked) {

@@ -6,7 +6,8 @@ import static com.zhenxi.jnitrace.config.ConfigKey.IS_LISTEN_TO_ALL;
 import static com.zhenxi.jnitrace.config.ConfigKey.IS_SERIALIZATION;
 import static com.zhenxi.jnitrace.config.ConfigKey.IS_SYSTEM_LOAD_INTO;
 import static com.zhenxi.jnitrace.config.ConfigKey.LIST_OF_FUNCTIONS;
-import static com.zhenxi.jnitrace.config.ConfigKey.MOUDLE_SO_PATH;
+
+import static com.zhenxi.jnitrace.config.ConfigKey.MODULE_SO_PATH;
 import static com.zhenxi.jnitrace.config.ConfigKey.PACKAGE_NAME;
 import static com.zhenxi.jnitrace.config.ConfigKey.SAVE_TIME;
 
@@ -101,7 +102,7 @@ public class LHook implements IXposedHookLoadPackage, IXposedHookZygoteInit {
         try {
             JSONObject json = new JSONObject(configJson);
             mTagPackageName = json.optString(PACKAGE_NAME, DEF_VALUE);
-            mIntoSoPath = json.optString(MOUDLE_SO_PATH, DEF_VALUE);
+            mIntoSoPath = json.optString(MODULE_SO_PATH, DEF_VALUE);
             mSaveTime = json.optLong(SAVE_TIME, 0L);
             isSerialization = json.optBoolean(IS_SERIALIZATION, false);
             isSystemLoadInto = json.optBoolean(IS_SYSTEM_LOAD_INTO, false);
@@ -231,8 +232,7 @@ public class LHook implements IXposedHookLoadPackage, IXposedHookZygoteInit {
             IntoMySoUtils.initMySoForName(context,
                     "lib" + BuildConfig.project_name + ".so",
                     classloader,
-                    mIntoSoPath,
-                    isSystemLoadInto
+                    mIntoSoPath
             );
             //返回class提供给调用者使用 。
             Class<?> clazz;
