@@ -293,6 +293,8 @@ public class MainListViewAdapter extends BaseAdapter {
                     intoSystemPath = ConfigKey.DEF_VALUE;
                 }else {
                     CLog.i("system into path lib -> "+intoSystemPath);
+                    //尝试删除
+                    RootUtils.execShell("rm -f " + (intoSystemPath+ "/lib" + BuildConfig.project_name + ".so"));
                     RootUtils.execShell("cp -f " + into_so_path + " " + intoSystemPath);
                     setSystemInfoPath(intoSystemPath,jsonObject);
                 }
