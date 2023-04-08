@@ -1,5 +1,6 @@
 package com.zhenxi.jnitrace.utils;
 
+import static com.zhenxi.jnitrace.config.ConfigKey.DEF_VALUE;
 import static com.zhenxi.jnitrace.config.ConfigKey.JNITRACE_DEX_NAME;
 
 import android.content.Context;
@@ -115,7 +116,7 @@ public class IntoMySoUtils {
                 Object[] dexElements = (Object[]) dexElementsField.get(dexPathList);
                 if (Objects.requireNonNull(dexElements).length == conunt &&
                         Arrays.hashCode(dexElements) == Arrays.hashCode(dexElementsResut)) {
-                    CLog.i("merge dexElements.length -> " + dexElements.length);
+                    //CLog.i("merge dexElements.length -> " + dexElements.length);
                     return true;
                 } else {
                     CLog.e("merge dexElements.length ->  " + dexElements.length + " conunt ->   " + conunt);
@@ -159,10 +160,13 @@ public class IntoMySoUtils {
     public static void initMySoForName(Context context,
                                        String name,
                                        ClassLoader so_classloader,
-                                       String intoSoPath) {
+                                       String intoSoPath,
+                                       String systemPath
+
+    ) {
         CLog.i("start initMySoForName " + name
                 + " [" + so_classloader.getClass().getName() + "]");
-        CLog.i("initMySoForName into path ->"+intoSoPath);
+        CLog.i("initMySoForName into path ->" + intoSoPath);
         try {
             //尝试将Classloader和native注册方法合并
             //防止因为传入不同的Classloader导致,无法对native方法进行注册。
@@ -172,8 +176,14 @@ public class IntoMySoUtils {
                 CLog.e("initMySoForName classloader merge error " + so_classloader.getClass().getName());
                 return;
             }
-            CLog.i("initMySoForName load so model is -> [LoadSoForPath()] ");
-            String path = getSoPath(context, name, intoSoPath);
+            String path;
+            if (systemPath==null||systemPath.equals(DEF_VALUE)) {
+                //本地路径
+                path = getSoPath(context, name, intoSoPath);
+            } else {
+                path = systemPath;
+            }
+            CLog.i("initMySoForName into so path ->  " + path);
             if (path != null) {
                 LoadSoForPath(path, so_classloader);
             } else {
@@ -210,9 +220,12 @@ public class IntoMySoUtils {
     private static boolean MergeClassloader(Context context, ClassLoader mainClassloader) {
         DexClassLoader classLoader = null;
         try {
-            File dexFile = new File(context.getApplicationInfo().
-                    dataDir+"/" + context.getPackageName() + "/" + JNITRACE_DEX_NAME);
-            CLog.i("MergeClassloader dex file path -> "+dexFile);
+            File dexFile = new File(context.getApplicationInfo().dataDir + "/" + JNITRACE_DEX_NAME);
+            if(!dexFile.exists()){
+                CLog.e(">>>>>>>>>> MergeClassloader dex not exists "+dexFile.getPath());
+                return false;
+            }
+            CLog.i("MergeClassloader dex file path -> " + dexFile);
             String cacheDir = context.getCacheDir().getAbsolutePath();
             classLoader = new DexClassLoader(dexFile.getPath(), cacheDir, null, mainClassloader);
         } catch (Throwable e) {
@@ -232,7 +245,7 @@ public class IntoMySoUtils {
         }
         Object[] otherClassloader = getClassLoaderElements(classLoader);
         if (otherClassloader == null || otherClassloader.length == 0) {
-            CLog.e("get otherClassloader Elements == null");
+            CLog.e(">>>>>>>>>>>> get otherClassloader Elements == null");
             return false;
         }
         try {
@@ -267,15 +280,15 @@ public class IntoMySoUtils {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             return Process.is64Bit();
         }
-        return is64bitForPackageName(context,xpMoudleName);
+        return is64bitForPackageName(context, xpMoudleName);
     }
 
-    public static boolean is64bitForPackageName(Context context,String packageName) throws Exception {
+    public static boolean is64bitForPackageName(Context context, String packageName) throws Exception {
         PackageManager pm = context.getPackageManager();
         PackageInfo packageInfo = pm.getPackageInfo(packageName, 0);
         String nativeLibraryDir = packageInfo.applicationInfo.nativeLibraryDir;
         boolean is64 = !nativeLibraryDir.startsWith(ARM);
-        CLog.i("is64bitForPackageName ["+packageName+"("+is64+")] "+nativeLibraryDir);
+        CLog.i("is64bitForPackageName [" + packageName + "(" + is64 + ")] " + nativeLibraryDir);
         //如果对方App没有So的话,默认使用64
         return is64;
     }
@@ -299,7 +312,7 @@ public class IntoMySoUtils {
             CLog.e("getSoPath getPackageInfo so path error ,start append path " + e.getMessage());
             baseApkPath = into_so_path_baseApk;
         }
-        if(baseApkPath == null){
+        if (baseApkPath == null) {
             CLog.e(">>>>>>>>>>>>  get so path base.apk == null !!!!!!!!!!!!!!");
             return null;
         }
@@ -311,7 +324,7 @@ public class IntoMySoUtils {
         try {
             ret = cacheDir + "/lib/" +
                     (is64bitSelf(BuildConfig.APPLICATION_ID, context) ? V8 : V7) + "/" +
-                     so_name;
+                    so_name;
         } catch (Throwable exception) {
             CLog.e("getSoPath is64bit   error " + exception.getMessage());
         }
@@ -366,16 +379,19 @@ public class IntoMySoUtils {
     public static void LoadSoForPath(String path, Object object) {
         try {
             CLog.e("load so path ->  " + path);
+            String Msg = null;
             if (Build.VERSION.SDK_INT >= 28) {
-                String nativeLoad = (String) XposedHelpers.callMethod(Runtime.getRuntime(), "nativeLoad", path, object);
-                CLog.e(nativeLoad == null ? "" : nativeLoad);
+                Msg = (String) XposedHelpers.callMethod(Runtime.getRuntime(), "nativeLoad", path, object);
             } else {
-                String doLoad = (String) XposedHelpers.callMethod(Runtime.getRuntime(), "doLoad", path, object);
-                CLog.e(doLoad == null ? "" : doLoad);
+                Msg = (String) XposedHelpers.callMethod(Runtime.getRuntime(), "doLoad", path, object);
             }
-            CLog.i("load so for path success " + path);
+            if(Msg!=null){
+                CLog.e(">>>>>>>> into so for path error -> "+Msg+" "+path);
+            }else {
+                CLog.i("load so for path success " + path);
+            }
         } catch (Throwable e) {
-            CLog.e("load so for path " + e.getMessage());
+            CLog.e("load so for path error" + e.getMessage());
         }
     }
 }

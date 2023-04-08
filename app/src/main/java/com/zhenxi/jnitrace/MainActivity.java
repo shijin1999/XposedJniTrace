@@ -51,14 +51,6 @@ public class MainActivity extends AppCompatActivity {
     private MainListViewAdapter mMainListViewAdapter;
 
 
-    public static class configInfo{
-
-        /**
-         * 是否开启内存序列化
-         */
-        boolean isSerialization = false;
-    }
-
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);

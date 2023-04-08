@@ -20,6 +20,7 @@ import com.zhenxi.jnitrace.BuildConfig;
 import com.zhenxi.jnitrace.R;
 import com.zhenxi.jnitrace.bean.AppBean;
 
+import com.zhenxi.jnitrace.config.ConfigKey;
 import com.zhenxi.jnitrace.utils.CLog;
 import com.zhenxi.jnitrace.utils.Constants;
 import com.zhenxi.jnitrace.utils.FileUtils;
@@ -31,6 +32,8 @@ import com.zhenxi.jnitrace.utils.SystemPath;
 import com.zhenxi.jnitrace.utils.ToastUtils;
 
 import java.io.File;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 
@@ -46,10 +49,12 @@ import static com.zhenxi.jnitrace.config.ConfigKey.LIST_OF_FUNCTIONS;
 import static com.zhenxi.jnitrace.config.ConfigKey.MODULE_SO_PATH;
 import static com.zhenxi.jnitrace.config.ConfigKey.PACKAGE_NAME;
 import static com.zhenxi.jnitrace.config.ConfigKey.SAVE_TIME;
+import static com.zhenxi.jnitrace.config.ConfigKey.SYSTEM_INTO_PATH;
 
 
 import androidx.appcompat.app.AlertDialog;
 
+import org.json.JSONException;
 import org.json.JSONObject;
 
 
@@ -218,23 +223,15 @@ public class MainListViewAdapter extends BaseAdapter {
             boolean isSystemPath = isSystemPathLoad.isChecked();
             jsonObject.put(IS_USE_SYSTEM_PATH, isSystemPath);
             try {
-                if(isSystemPath) {
-                    String systemPath = SystemPath.getSystemPath(IntoMySoUtils.
-                            is64bitForPackageName(mContext, bean.packageName));
-                    jsonObject.put(MODULE_SO_PATH,systemPath);
-                }else {
-                    //普通的根目录注入
-                    PackageInfo packageInfo =
-                            mContext.getPackageManager().
-                                    getPackageInfo(BuildConfig.APPLICATION_ID, 0);
-                    //Base.apk路径
-                    jsonObject.put(MODULE_SO_PATH, packageInfo.applicationInfo.publicSourceDir);
-                }
+                //普通的根目录注入
+                PackageInfo packageInfo = mContext.getPackageManager().getPackageInfo(BuildConfig.APPLICATION_ID, 0);
+                //Base.apk路径
+                jsonObject.put(MODULE_SO_PATH, packageInfo.applicationInfo.publicSourceDir);
             } catch (Throwable e) {
                 CLog.e("MOUDLE_SO_PATH error " + e, e);
                 jsonObject.put(MODULE_SO_PATH, null);
             }
-            CLog.i("module into base.apk path  -> " + jsonObject.getString(MODULE_SO_PATH));
+            //CLog.i("module into base.apk path  -> " + jsonObject.getString(MODULE_SO_PATH));
             //保存时间,增加时效性
             jsonObject.put(SAVE_TIME, System.currentTimeMillis());
             jsonObject.put(IS_SERIALIZATION, isSerialization.isChecked());
@@ -245,12 +242,32 @@ public class MainListViewAdapter extends BaseAdapter {
     }
 
     private void saveConfigForLocation(AppBean bean, JSONObject jsonObject) {
-        SpUtil.putString(mContext, CONFIG_JSON, jsonObject.toString());
         initConfig(bean.packageName, jsonObject);
         CLog.e("save config file info -> " + jsonObject);
+        SpUtil.putString(mContext, CONFIG_JSON, jsonObject.toString());
         ToastUtils.showToast(mContext,
                 "保存成功文件路径为\n" +
                         "data/data/" + bean.packageName);
+    }
+
+    private String getRootPath(String pathStr) {
+        int secondSlashIndex = pathStr.indexOf('/', pathStr.indexOf('/') + 1);
+        if (secondSlashIndex != -1) {
+            return pathStr.substring(0, secondSlashIndex);
+        }
+        return null;
+    }
+
+    private void setSystemInfoPath(String savepath, JSONObject jsonObject) {
+        try {
+
+            String path = savepath + "/lib" + BuildConfig.project_name + ".so";
+            RootUtils.execShell("chmod 777 " + path);
+            jsonObject.put(SYSTEM_INTO_PATH, path);
+            CLog.i(">>>>>>>>>>>>>>>> cp file success !! " + path);
+        } catch (Throwable e) {
+            CLog.e("setSystemInfoPath error " + e, e);
+        }
     }
 
     /**
@@ -261,6 +278,25 @@ public class MainListViewAdapter extends BaseAdapter {
     @SuppressWarnings("All")
     private void initConfig(String packageName, JSONObject jsonObject) {
         try {
+            if (isSystemPathLoad.isChecked()) {
+                boolean is64 = IntoMySoUtils.is64bitForPackageName(mContext, packageName);
+                String into_so_path = IntoMySoUtils.getSoPath(mContext, "lib" + BuildConfig.project_name + ".so", null);
+                String intoSystemPath = null;
+                PackageManager pm = mContext.getPackageManager();
+                PackageInfo packageInfo = pm.getPackageInfo(packageName, 0);
+                if (packageInfo != null) {
+                    //base apk的路径
+                    intoSystemPath = packageInfo.applicationInfo.nativeLibraryDir;
+                }
+                //将so放到/cache 或者/data/local/tmp/但是发现没权限
+                if(intoSystemPath==null){
+                    intoSystemPath = ConfigKey.DEF_VALUE;
+                }else {
+                    CLog.i("system into path lib -> "+intoSystemPath);
+                    RootUtils.execShell("cp -f " + into_so_path + " " + intoSystemPath);
+                    setSystemInfoPath(intoSystemPath,jsonObject);
+                }
+            }
             File jnitraceModleData
                     = new File("/data/data/" + BuildConfig.APPLICATION_ID);
             File config = new File(jnitraceModleData, BuildConfig.project_name + "Config");
@@ -315,36 +351,8 @@ public class MainListViewAdapter extends BaseAdapter {
             CLog.i(">>>>>>>>>> chmod 777 path -> " + tagConfigFile + " " + dexFile);
             RootUtils.execShell("chmod 777 " + tagConfigFile.getPath());
             RootUtils.execShell("chmod 777 " + tagDexFile.getPath());
-            if(isSystemPathLoad.isChecked()){
-                boolean is64 = IntoMySoUtils.is64bitForPackageName(mContext, packageName);
-                //将我们注入的So移动到系统目录下 。
-                String systemPath = SystemPath.getSystemPath(is64);
-                //如果是64位则移动到64位下,32则移动到32位下 。
-                String into_so_path = IntoMySoUtils.getSoPath(mContext,
-                        "lib" + BuildConfig.project_name + ".so",
-                        null);
 
-                //尝试挂载/读写,不能挂载/system ,
-                boolean isSuccess = RootUtils.execShell(
-                        new String[]{
-                                "mount -o remount,rw /",
-                                ("cp -f " + into_so_path + " " + systemPath)
-                        });
-                if(!isSuccess){
-                    //尝试挂载面具下的,magisk模拟了system
-                    //因为有的手机装载了Magisk,Magisk会进行模拟,必须前面加路径
-                    isSuccess = RootUtils.execShell(
-                            new String[]{
-                            "mount -o remount,rw /sbin/.magisk/mirror/system_root",
-                            ("cp -f " + into_so_path + " /sbin/.magisk/mirror/system_root" + systemPath)
-                            });
-                }
-                if(!isSuccess) {
-                    CLog.e(">>>>>>>>>>>>>>>> cp file error !!");
-                }else {
-                    CLog.i(">>>>>>>>>>>>>>>> cp file success !!");
-                }
-            }
+
         } catch (Throwable e) {
             CLog.e("initConfig error  " + e, e);
         }

@@ -6,6 +6,7 @@ package com.zhenxi.jnitrace.config;
 
 public class ConfigKey {
 
+    public static final String DEF_VALUE = "DEF";
 
     public static final String CONFIG_JSON="CONFIG_JSON";
     /**
@@ -70,4 +71,11 @@ public class ConfigKey {
      * 这样maps里面看到的我们注入的So在系统目录下。以逃避检测。
      */
     public static final String IS_USE_SYSTEM_PATH = "IS_USE_SYSTEM_PATH";
+
+
+    /**
+     * 系统注入的具体路径,先尝试获取libart.so的路径,尝试写入。
+     * 如果获取不到的话则往/data/location/tmp下写入
+     */
+    public static final String SYSTEM_INTO_PATH = "SYSTEM_INTO_PATH";
 }

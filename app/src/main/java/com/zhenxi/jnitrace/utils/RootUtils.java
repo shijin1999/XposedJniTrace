@@ -86,7 +86,7 @@ public class RootUtils {
         return true;
     }
     public static boolean execShell(String[] cmd) {
-        CLog.e("execShell cmd -> " + Arrays.toString(cmd));
+        CLog.i("execShell cmd -> " + Arrays.toString(cmd));
         Process process = null;
         DataOutputStream os = null;
         try {
@@ -109,7 +109,7 @@ public class RootUtils {
                 }
                 br.close();
                 inputStreamReader.close();
-                CLog.e("execShell process.waitFor " + e + " " + Arrays.toString(cmd));
+                CLog.e("execShell error  "+ Arrays.toString(cmd));
                 CLog.e("errorMsg->  " + errorMsg);
                 return false;
             }
@@ -131,46 +131,6 @@ public class RootUtils {
         return false;
     }
     public static boolean execShell(String cmd) {
-        CLog.e("execShell cmd -> " + cmd);
-        Process process = null;
-        DataOutputStream os = null;
-        try {
-            process = Runtime.getRuntime().exec("su"); //切换到root帐号
-            os = new DataOutputStream(process.getOutputStream());
-            os.writeBytes(cmd + "\n");
-            os.writeBytes("exit\n");
-            os.flush();
-            int e = process.waitFor();
-            if (e != 0) {
-                //失败,打印具体信息
-                InputStreamReader inputStreamReader = new InputStreamReader(process.getErrorStream());
-                BufferedReader br = new BufferedReader(inputStreamReader);
-                String line;
-                StringBuilder errorMsg = new StringBuilder();
-                while ((line = br.readLine()) != null) {
-                    errorMsg.append(line).append("\n");
-                }
-                br.close();
-                inputStreamReader.close();
-                CLog.e("execShell process.waitFor " + e + " " + cmd);
-                CLog.e("errorMsg->  " + errorMsg);
-                return false;
-            }
-            return true;
-        } catch (Throwable e) {
-            CLog.e("execShell get root error  " + e.getMessage());
-        } finally {
-            try {
-                if (os != null) {
-                    os.close();
-                }
-                if (process != null) {
-                    process.destroy();
-                }
-            } catch (Exception ignored) {
-
-            }
-        }
-        return false;
+        return execShell(new String[]{cmd});
     }
 }

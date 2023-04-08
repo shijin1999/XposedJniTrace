@@ -1,15 +1,18 @@
 package com.zhenxi.jnitrace;
 
 import static com.zhenxi.jnitrace.config.ConfigKey.CONFIG_JSON;
+import static com.zhenxi.jnitrace.config.ConfigKey.DEF_VALUE;
 import static com.zhenxi.jnitrace.config.ConfigKey.FILTER_LIST;
 import static com.zhenxi.jnitrace.config.ConfigKey.IS_LISTEN_TO_ALL;
 import static com.zhenxi.jnitrace.config.ConfigKey.IS_SERIALIZATION;
 import static com.zhenxi.jnitrace.config.ConfigKey.IS_SYSTEM_LOAD_INTO;
+import static com.zhenxi.jnitrace.config.ConfigKey.IS_USE_SYSTEM_PATH;
 import static com.zhenxi.jnitrace.config.ConfigKey.LIST_OF_FUNCTIONS;
 
 import static com.zhenxi.jnitrace.config.ConfigKey.MODULE_SO_PATH;
 import static com.zhenxi.jnitrace.config.ConfigKey.PACKAGE_NAME;
 import static com.zhenxi.jnitrace.config.ConfigKey.SAVE_TIME;
+import static com.zhenxi.jnitrace.config.ConfigKey.SYSTEM_INTO_PATH;
 
 import android.app.NotificationManager;
 import android.content.Context;
@@ -50,7 +53,6 @@ public class LHook implements IXposedHookLoadPackage, IXposedHookZygoteInit {
         HiddenApiBypass.addHiddenApiExemptions("");
     }
 
-    private static final String DEF_VALUE = "DEF";
 
 
     /**
@@ -70,9 +72,9 @@ public class LHook implements IXposedHookLoadPackage, IXposedHookZygoteInit {
     private static ClassLoader mProcessClazzLoader = null;
 
     /**
-     * 注入模块的so文件路径
+     * 注入模块的apk路径
      */
-    private static String mIntoSoPath = null;
+    private static String mModuleBaseApkPath = null;
 
     private static long mSaveTime = 0;
     /**
@@ -93,7 +95,7 @@ public class LHook implements IXposedHookLoadPackage, IXposedHookZygoteInit {
 
     private static boolean isInit = false;
 
-    private static  Class<?> NativeEngineClazz = null;
+    private static String systemIntoPath = null;
 
     private void initConfigData(String configJson) {
         if (configJson == null || configJson.length() == 0 || configJson.equals(DEF_VALUE)) {
@@ -102,7 +104,7 @@ public class LHook implements IXposedHookLoadPackage, IXposedHookZygoteInit {
         try {
             JSONObject json = new JSONObject(configJson);
             mTagPackageName = json.optString(PACKAGE_NAME, DEF_VALUE);
-            mIntoSoPath = json.optString(MODULE_SO_PATH, DEF_VALUE);
+            mModuleBaseApkPath = json.optString(MODULE_SO_PATH, DEF_VALUE);
             mSaveTime = json.optLong(SAVE_TIME, 0L);
             isSerialization = json.optBoolean(IS_SERIALIZATION, false);
             isSystemLoadInto = json.optBoolean(IS_SYSTEM_LOAD_INTO, false);
@@ -136,6 +138,11 @@ public class LHook implements IXposedHookLoadPackage, IXposedHookZygoteInit {
                         CLog.e("filter so list  == null !!!!!!!");
                     }
                 }
+            }
+            boolean isSystemPath = json.optBoolean(IS_USE_SYSTEM_PATH, false);
+            if(isSystemPath){
+                systemIntoPath = json.optString(SYSTEM_INTO_PATH, DEF_VALUE);
+                CLog.i("into system path -> "+systemIntoPath);
             }
         } catch (Throwable e) {
             CLog.e("initConfigData error " + e, e);
@@ -187,10 +194,10 @@ public class LHook implements IXposedHookLoadPackage, IXposedHookZygoteInit {
             if (isMatch(loadPackageParam.packageName)) {
                 CLog.e("find tag app ->  " + loadPackageParam.packageName);
                 CLog.i("[" + mTagPackageName + "]init config success ! isSerialization -> "
-                        + isSerialization + "  into so path -> " + mIntoSoPath + " is hook all -> " + isListenAll);
-                CLog.e("LHook classloader "+LHook.class.getClassLoader()+" "+LHook.class.getClassLoader().hashCode());
-                CLog.e("LHook loadPackageParam.classLoader "
-                        +loadPackageParam.classLoader+" "+loadPackageParam.classLoader.hashCode());
+                        + isSerialization + "  into so path -> " + mModuleBaseApkPath + " is hook all -> " + isListenAll);
+//                CLog.e("LHook classloader "+LHook.class.getClassLoader()+" "+LHook.class.getClassLoader().hashCode());
+//                CLog.e("LHook loadPackageParam.classLoader "
+//                        +loadPackageParam.classLoader+" "+loadPackageParam.classLoader.hashCode());
 
                 startInit();
 
@@ -232,7 +239,8 @@ public class LHook implements IXposedHookLoadPackage, IXposedHookZygoteInit {
             IntoMySoUtils.initMySoForName(context,
                     "lib" + BuildConfig.project_name + ".so",
                     classloader,
-                    mIntoSoPath
+                    mModuleBaseApkPath,
+                    systemIntoPath
             );
             //返回class提供给调用者使用 。
             Class<?> clazz;
@@ -360,8 +368,8 @@ public class LHook implements IXposedHookLoadPackage, IXposedHookZygoteInit {
             CLog.e(">>>>>>>>>>>>>>> start into my so ,is system.load ["+isSystemLoadInto+"] <<<<<<<<<<<<<<<<<");
             try {
                 //处理JNI监听
-                NativeEngineClazz = intoMySo(context, isSystemLoadInto);
-                if (NativeEngineClazz == null) {
+                Class<?> nativeEngineClazz = intoMySo(context, isSystemLoadInto);
+                if (nativeEngineClazz == null) {
                     CLog.e("intoMySo get clazz == null !");
                     return;
                 }
@@ -382,7 +390,7 @@ public class LHook implements IXposedHookLoadPackage, IXposedHookZygoteInit {
                     return;
                 }
                 //start hook native
-                callStartHookJni(NativeEngineClazz, isListenAll, file.getPath());
+                callStartHookJni(nativeEngineClazz, isListenAll, file.getPath());
             }
             catch (Throwable e) {
                 CLog.e("into&hook jni error " + e,e);
