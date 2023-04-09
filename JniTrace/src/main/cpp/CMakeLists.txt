@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.4.1)
 set(CMAKE_ANDROID_ARCH_ABI armeabi-v7a arm64-v8a)
 
-project(XposedJniTrace)
+project(JniTrace)
 
 enable_language(C ASM)
 
@@ -9,7 +9,7 @@ SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-narrowing -std=c++20")
 
 message(STATUS ">>>>>>>> funJni building ${PROJECT_SO_NAME} ")
 
-string(REGEX REPLACE "(.*)/app/src.*" "\\1" HomePath ${PROJECT_SOURCE_DIR})
+string(REGEX REPLACE "(.*)/JniTrace/src.*" "\\1" HomePath ${PROJECT_SOURCE_DIR})
 
 message(STATUS ">>>>>>>> home path -> ${HomePath} ")
 

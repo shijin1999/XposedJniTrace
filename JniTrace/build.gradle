@@ -18,6 +18,9 @@ def project_name = "FunJni"
 
 android {
     compileSdkVersion 28
+    //NDK R23 super C++20 min version
+    ndkVersion '25.1.8937393'
+    
     defaultConfig {
         applicationId "com.zhenxi.FunJni"
         minSdkVersion 21
@@ -118,8 +121,7 @@ android {
 //        checkReleaseBuilds false
 //        abortOnError false
 //    }
-    //NDK R23 super C++20 min version
-    ndkVersion '25.1.8937393'
+
 }
 task copyNdkLibs(type: Copy) {
     from(new File(projectDir, 'src/main/jniLibs')) {
