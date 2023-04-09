@@ -21,10 +21,6 @@
 #define DLFCN_COMPAT_zhenxi_H
 
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 void *dlopen_compat(const char *filename, int flags);
 
 void *dlsym_compat(void *handle, const char *symbol);
@@ -35,11 +31,9 @@ const char *dlerror_compat();
 
 void *getSymCompat(const char *filename, const char *symbol);
 
-void* getSymByELF(const char * filename, const char *symbol);
+void *getSymByELF(const char *filename, const char *symbol);
 
-#ifdef __cplusplus
-}
-#endif
+void *getSymByELF(const SandHook::ElfImg &elfImg, const char *symbol);
 
 
 #endif //DLFCN_COMPAT_zhenxi_H
