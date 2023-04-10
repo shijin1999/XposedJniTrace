@@ -113,19 +113,25 @@ MapItemInfo getSoBaseAddress(const char *name) {
     size_t len = 0;
     char buffer[PATH_MAX];
     memset(buffer, 0, PATH_MAX);
-    //读取的Maps不进行IO重定向
-    FILE *fp =fopen("/proc/self/abcd", "r");
+    FILE *fp =fopen("/proc/self/maps", "r");
     if(fp == nullptr){
-        //找不到用原始文件
-        fp = fopen("/proc/self/maps", "r");
-        if(fp== nullptr){
-            return info;
-        }
+        LOGE("getSoBaseAddress open maps == null %s",name)
+        return info;
+    }
+    bool isDebugLog = false;
+    if(strstr(name,"libil2cpp.so")){
+        isDebugLog = true;
     }
     char *line = nullptr;
     while (getline(&line, &len, fp) != -1) {
+        if(isDebugLog){
+            LOGE("%s",line)
+        }
         if (line!= nullptr&&strstr(line, name)) {
             sscanf(line, "%lx-%lx",&start, &end);
+            if(StringUtils::endsWith(name,"libil2cpp.so")){
+                LOGE("mathch -> %s",line)
+            }
             //start 只有第一次赋值
             if(isFirst){
                 info.start = start;

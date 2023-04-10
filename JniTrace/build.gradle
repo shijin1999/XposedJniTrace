@@ -17,14 +17,14 @@ stringfog {
 def project_name = "FunJni"
 
 android {
-    compileSdkVersion 28
+    compileSdkVersion rootProject.ext.compileSdkVersion
     //NDK R23 super C++20 min version
-    ndkVersion '25.1.8937393'
-    
+    ndkVersion rootProject.ext.ndkVersion
+
     defaultConfig {
-        applicationId "com.zhenxi.FunJni"
-        minSdkVersion 21
-        targetSdkVersion 21 //support old xposed
+        applicationId "com.zhenxi.il2cpptrace"
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion //support old xposed
         versionCode 122
         versionName "1.2.2"
         ndk {
@@ -45,7 +45,7 @@ android {
                 variant.outputs.all {
                     if (buildType.name == 'release') {
                         def createTime = new Date().format("YYYY-MM-dd", TimeZone.getTimeZone("GMT+08:00"))
-                        outputFileName "FunJni_"+"v" + defaultConfig.versionName + "_" + createTime + "_" + buildType.name + ".apk"
+                        outputFileName project_name+"_"+"v" + defaultConfig.versionName + "_" + createTime + "_" + buildType.name + ".apk"
                     }
                 }
 
@@ -140,11 +140,12 @@ tasks.whenTaskAdded { task ->
     }
 }
 dependencies {
-    implementation 'androidx.appcompat:appcompat:1.1.0'
 
     implementation 'androidx.recyclerview:recyclerview:1.2.1'
     implementation 'com.github.megatronking.stringfog:xor:4.0.1'
     implementation 'com.google.android.material:material:1.1.0'
+
+    api project(path: ':baseLib')
 
     //为了兼容老版本Xposed
     //Gradle4.6开始provided关键字被弃用。

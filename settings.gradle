@@ -22,4 +22,7 @@ dependencyResolutionManagement {
 }
 rootProject.name = "XposedHookNative"
 include ':JniTrace'
+include ':il2cppTrace'
+
 include ':nativeLib'
+include ':baseLib'

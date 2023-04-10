@@ -62,14 +62,12 @@ void *getSymByELF(const SandHook::ElfImg &elfImg, const char *symbol) {
 }
 
 void *getSymByELF(const char *filename, const char *symbol) {
-    //尝试解析Debug符号,栈里面,自动释放
     SandHook::ElfImg elfImg(filename);
     void *pSymbol = elfImg.getSymbAddress(symbol);
     if (pSymbol != nullptr) {
         //LOGI("get debug symbol sucess! ")
         return pSymbol;
     }
-
     LOGE("get debug symbol fail ! %s %s ", filename, symbol)
     return nullptr;
 }
