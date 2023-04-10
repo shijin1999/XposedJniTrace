@@ -8,10 +8,10 @@
 #include "AllInclude.h"
 #include "ZhenxiLog.h"
 #include "logging.h"
-#include "dlfcn_nougat.h"
-#include "dlfcn_compat.h"
 #include "libpath.h"
 #include "version.h"
+#include "xdl.h"
+#include "adapter.h"
 
 
 static std::ofstream *invokeOs;

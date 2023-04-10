@@ -53,6 +53,8 @@
 
 #define MATCH_ELF "libil2cpp.so"
 
+#include "elf_util.h"
+
 namespace ZhenxiRunTime::linkerHandler {
     static std::ofstream *hookStrHandlerOs;
     static bool isSave = false;
@@ -65,25 +67,8 @@ namespace ZhenxiRunTime::linkerHandler {
             LOGE("find  libil2cpp.so but save path == null ")
             return;
         }
-        bool isFirst = false;
-        if (StringUtils::endsWith(filename,MATCH_ELF )) {
-            size_t start = 0 ,end =0 ;
-            size_t mstart = 0 ,mend =0 ;
-            FILE *fp = fopen("/proc/self/maps", "r");
-            char *line = nullptr;
-            size_t len = 0;
-            while (getline(&line, &len, fp) != -1) {
-                if(my_strstr(line,MATCH_ELF)){
-                    LOGE("11111111111 %s ",line)
-                    sscanf(line, "%lx-%lx",&mstart, &mend);
-
-                }
-            }
-            end = mend;
-            if (start == 0) {
-                LOGE(">>>>>>>>>>>> mapInfo.start==0 %s", filename)
-                return;
-            }
+        if (StringUtils::endsWith(filename, MATCH_ELF)) {
+            LOGE(">>>>>>>>>>>> find libil2cpp.so is load  %s", filename)
             hack_prepare(filename, saveFilePath);
         }
     }

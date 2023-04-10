@@ -18,15 +18,18 @@
 #include "ZhenxiLog.h"
 #include "logging.h"
 
-#include "dlfcn_compat.h"
-//#include "xdl.h"
+#include "xdl.h"
 
 
 void hack_start(const char *path, const char *game_data_dir) {
-    SandHook::ElfImg elfImg(path);
-    il2cpp_api_init(elfImg);
+    void *handle = xdl_open(path, 0);
+    if (handle == nullptr) {
+        LOG(ERROR) << "hack_start xdl_open [%s] == null" << path;
+        return;
+    }
+    il2cpp_api_init(handle);
     il2cpp_dump(game_data_dir);
-    LOG(INFO)<< ">>>>>>>>>> il2cpp_dump is finish ";
+    LOG(INFO) << ">>>>>>>>>> il2cpp_dump is finish ";
 }
 
 
@@ -53,7 +56,7 @@ struct NativeBridgeCallbacks {
 };
 
 void hack_prepare(const char *path, const char *game_data_dir) {
-    LOG(INFO)<< "hack_prepare is start ,start hack_thread";
-    std::thread hack_thread(hack_start,path,game_data_dir);
+    LOG(INFO) << "hack_prepare is start ,start hack_thread";
+    std::thread hack_thread(hack_start, path, game_data_dir);
     hack_thread.detach();
 }

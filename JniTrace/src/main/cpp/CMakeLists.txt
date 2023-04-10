@@ -80,6 +80,7 @@ target_link_libraries(
 
         utils
         raw_syscall
+        xdl
 )
 
 

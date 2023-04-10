@@ -13,11 +13,10 @@
 #include <fstream>
 #include <unistd.h>
 
-//#include "xdl.h"
+#include "xdl.h"
 #include "ZhenxiLog.h"
 #include "il2cpp-tabledefs.h"
 #include "il2cpp-class.h"
-#include "dlfcn_compat.h"
 
 #define DO_API(r, n, p) r (*n) p
 
@@ -27,10 +26,13 @@
 
 static uint64_t il2cpp_base = 0;
 
-void init_il2cpp_api(const SandHook::ElfImg &handle) {
+void init_il2cpp_api(void *handle) {
 #define DO_API(r, n, p) {                      \
-    n = (r (*) p)getSymByELF(handle, #n); \
-} \
+    n = (r (*) p)xdl_sym(handle, #n, nullptr); \
+    if(!n) {                                   \
+        LOGW("api not found %s", #n);          \
+    }                                          \
+}
 
 #include "il2cpp-api-functions.h"
 
@@ -321,7 +323,7 @@ std::string dump_type(const Il2CppType *type) {
     return outPut.str();
 }
 
-void il2cpp_api_init(const SandHook::ElfImg &handle) {
+void il2cpp_api_init(void *handle) {
     init_il2cpp_api(handle);
     if (il2cpp_domain_get_assemblies) {
         Dl_info dlInfo;

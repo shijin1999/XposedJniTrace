@@ -45,6 +45,7 @@
 #include "libpath.h"
 #include "HookUtils.h"
 #include "appUtils.h"
+#include "elf.h"
 
 
 

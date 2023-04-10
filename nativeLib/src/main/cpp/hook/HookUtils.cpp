@@ -2,6 +2,7 @@
 // Created by zhenxi on 2021/5/16.
 //
 
+#include <list>
 
 #include "HookUtils.h"
 /**
@@ -15,7 +16,11 @@
  */
 #include <inline_hook.h>
 
+#include "xdl.h"
+#include "logging.h"
+#include "ZhenxiLog.h"
 
+using namespace std;
 
 /**
  * 保存全部hook的地址,防止某一个方法被多次Hook
@@ -97,7 +102,7 @@ bool HookUtils::Hooker(void *dysym, void *newrep, void **org) {
 }
 
 bool HookUtils::Hooker(void *handler, const char *dysym, void *repl, void **org) {
-    void *sym = dlsym_compat(handler, dysym);
+    void *sym = getSymCompatForHandler(handler, dysym);
     if (sym == nullptr) {
         LOG(ERROR) << "HookUtils hook sym == null    " << dysym;
         return false;
@@ -154,7 +159,6 @@ void hook_libc_function(void *handle, const char *symbol, void *new_func, void *
         return;
     }
     if (!HookUtils::Hooker(addr, new_func, old_func)) {
-        LOGE(">>>>>>>>>>> hook libc %s fail !", symbol)
+        LOGE(">>>>>>>>>>> io  hook %s fail !", symbol)
     }
-    LOGI(">>>>>>>>>>> hook libc  hook %s success !",symbol)
 }

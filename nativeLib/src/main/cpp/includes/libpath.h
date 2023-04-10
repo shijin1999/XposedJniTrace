@@ -7,12 +7,8 @@
 
 
 
-#include "dlfcn_compat.h"
 
 
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 char *getlibArtPath() ;
 
@@ -26,9 +22,7 @@ char *getMediaPath() ;
 
 char *getJitPath();
 
-#ifdef __cplusplus
-}
-#endif
+
 
 
 #endif //QCONTAINER_PRO_LIBPATH_H

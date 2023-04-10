@@ -44,8 +44,8 @@
 #include "HookUtils.h"
 #include "mylibc.h"
 #include "stringUtils.h"
-#include "dlfcn_compat.h"
 #include "libpath.h"
+#include "ZhenxiLog.h"
 
 
 using namespace StringUtils;

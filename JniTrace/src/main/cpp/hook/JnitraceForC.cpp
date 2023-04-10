@@ -4,6 +4,7 @@
 
 #include "mylibc.h"
 #include "HookUtils.h"
+#include "ZhenxiLog.h"
 
 namespace ZhenxiRunTime::JniTrace {
     static void

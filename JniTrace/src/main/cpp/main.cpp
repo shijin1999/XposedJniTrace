@@ -11,6 +11,7 @@
 #include <climits>
 #include <iostream>
 #include <fstream>
+#include <list>
 
 #include "libpath.h"
 #include "parse.h"
@@ -18,6 +19,9 @@
 #include "stringHandler.h"
 #include "invokePrintf.h"
 #include "linkerHandler.h"
+#include "xdl.h"
+#include "ZhenxiLog.h"
+#include "adapter.h"
 
 
 #define PRINTF_LIST(list) \
@@ -71,8 +75,8 @@ void startHookJni(JNIEnv *env,
     auto listenerAll = parse::jboolean2bool(isListenerAll);
     auto prettyMethodSym =
             reinterpret_cast<std::string(*)(void *, bool)>
-            (fake_dlsym(fake_dlopen(getlibArtPath(), RTLD_NOW),
-                        "_ZN3art9ArtMethod12PrettyMethodEb"));
+            (getSymCompat(getlibArtPath(), "_ZN3art9ArtMethod12PrettyMethodEb"));
+
     //排除我们自己的SO,防止重复调用导致栈溢出。
     const std::list<string> forbid_list{CORE_SO_NAME};
     if (filepath != nullptr) {
@@ -105,8 +109,7 @@ void startHookJni(JNIEnv *env,
             //hook all java invoke
             invokePrintf::HookJNIInvoke(env, saveOs, prettyMethodSym);
         }
-    }
-    else {
+    } else {
         //现阶段一定会保存到文件里面,下面的逻辑可能不会执行
 //        if (has_boolean(function_list, 0)) {
 //            //hook jni

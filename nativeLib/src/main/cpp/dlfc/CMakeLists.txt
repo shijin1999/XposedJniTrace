@@ -5,6 +5,7 @@ cmake_minimum_required(VERSION 3.4.1)
 enable_language(C ASM)
 
 
+add_subdirectory(xDL)
 
 
 
@@ -16,8 +17,6 @@ add_library(
 
         STATIC
 
-        dlfcn_compat.cpp
-        dlfcn_nougat.cpp
         elf_util.cpp
 
 )
