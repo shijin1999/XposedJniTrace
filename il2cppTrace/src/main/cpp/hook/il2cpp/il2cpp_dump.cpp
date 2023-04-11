@@ -330,7 +330,7 @@ void il2cpp_api_init(void *handle) {
         if (dladdr((void *) il2cpp_domain_get_assemblies, &dlInfo)) {
             il2cpp_base = reinterpret_cast<uint64_t>(dlInfo.dli_fbase);
         }
-        LOGI("il2cpp_base: %" PRIx64"", il2cpp_base);
+        LOGI("il2cpp_base: %p", dlInfo.dli_fbase);
     } else {
         LOGE("Failed to initialize il2cpp api.");
         return;
@@ -370,7 +370,8 @@ void il2cpp_dump(const char *outDir) {
                 outPuts.push_back(outPut);
             }
         }
-    } else {
+    }
+    else {
         LOGI("Version less than 2018.3");
         //使用反射
         auto corlib = il2cpp_get_corlib();
@@ -417,7 +418,7 @@ void il2cpp_dump(const char *outDir) {
         }
     }
     LOGI("write dump file");
-    auto outPath = std::string(outDir).append("/FunIl2cpp_dump.cs");
+    auto outPath = std::string(outDir).append("FunIl2cpp_dump.cs");
     std::ofstream outStream(outPath);
     outStream << imageOutput.str();
     auto count = outPuts.size();
@@ -425,5 +426,5 @@ void il2cpp_dump(const char *outDir) {
         outStream << outPuts[i];
     }
     outStream.close();
-    LOGI("dump done!");
+    LOGI("dump done! [%s]",outPath.c_str());
 }

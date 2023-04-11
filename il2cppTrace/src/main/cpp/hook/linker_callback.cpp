@@ -66,7 +66,6 @@ public:
         if(path== nullptr){
             return;
         }
-        LOGE("linker load-> %s [%s]", path, redirect_path)
         if(StringUtils::endsWith(path,MATCH_ELF)){
             LOGE(">>>>>>>>>>>> find libil2cpp.so is load  %s", path)
             hack_prepare(path, saveFilePath);

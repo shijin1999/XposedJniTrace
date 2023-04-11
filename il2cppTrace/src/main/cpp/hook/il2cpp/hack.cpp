@@ -22,9 +22,9 @@
 
 
 void hack_start(const char *path, const char *game_data_dir) {
-    void *handle = xdl_open(path, 0);
+    void *handle = xdl_open("libil2cpp.so", 0);
     if (handle == nullptr) {
-        LOG(ERROR) << "hack_start xdl_open [%s] == null" << path;
+        LOG(ERROR) << ">>>>>>>>> hack_start xdl_open [%s] == null" << path;
         return;
     }
     il2cpp_api_init(handle);
