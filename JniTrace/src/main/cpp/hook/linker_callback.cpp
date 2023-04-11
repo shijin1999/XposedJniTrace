@@ -46,15 +46,19 @@
 #include "libpath.h"
 #include "HookUtils.h"
 #include "appUtils.h"
-#include "hack.h"
-#include "main.h"
 #include "fileUtils.h"
 #include "mylibc.h"
 #include "elf_util.h"
 
 #define MATCH_ELF "libil2cpp.so"
 
+
+namespace linker_callback {
+    static bool isSave = false;
+    static std::ofstream *hookStrHandlerOs;
+}
 using namespace ZhenxiRunTime;
+using namespace linker_callback;
 
 class FunJniLinkerCallBack : public LinkerLoadCallBack {
 public:
@@ -63,17 +67,24 @@ public:
     }
 
     void loadAfter(const char *path, const char *redirect_path, void *ret) const override {
-        if(path== nullptr){
+        if (path == nullptr) {
             return;
         }
-        LOGE("linker load-> %s [%s]", path, redirect_path)
-        if(StringUtils::endsWith(path,MATCH_ELF)){
-            LOGE(">>>>>>>>>>>> find libil2cpp.so is load  %s", path)
-            hack_prepare(path, saveFilePath);
+        if (isSave) {
+            if (hookStrHandlerOs != nullptr) {
+                (*hookStrHandlerOs) << path;
+            }
         }
+        LOG(INFO) << path;
     }
 };
-void linkerCallBack::hookLinkerCallBack() {
+
+
+void linkerCallBack::hookLinkerCallBack(std::ofstream *os) {
+    if (os != nullptr) {
+        linker_callback::isSave = true;
+        linker_callback::hookStrHandlerOs = os;
+    }
     ZhenxiRunTime::linkerHandler::init();
     ZhenxiRunTime::linkerHandler::addLinkerCallBack(new FunJniLinkerCallBack());
 }

@@ -18,10 +18,10 @@
 #include "JnitraceForC.h"
 #include "stringHandler.h"
 #include "invokePrintf.h"
-#include "linkerHandler.h"
 #include "xdl.h"
 #include "ZhenxiLog.h"
 #include "adapter.h"
+#include "linker_callback.h"
 
 
 #define PRINTF_LIST(list) \
@@ -103,7 +103,7 @@ void startHookJni(JNIEnv *env,
         }
         if (has_boolean(function_list, "3")) {
             //hook so linker
-            linkerHandler::linkerCallBack(saveOs);
+            linkerCallBack::hookLinkerCallBack(saveOs);
         }
         if (has_boolean(function_list, "4")) {
             //hook all java invoke
