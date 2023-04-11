@@ -6,23 +6,18 @@
 #define QCONTAINER_PRO_LIBPATH_H
 
 
+char *getlibArtPath();
 
+char *getLinkerPath();
 
-
-
-char *getlibArtPath() ;
-
-char *getLinkerPath() ;
 //这里面包含了一些 对string操作的方法
- char *getlibcPlusPath() ;
+char *getlibcPlusPath();
 
- char *getlibcPath() ;
+char *getlibcPath();
 
-char *getMediaPath() ;
+char *getMediaPath();
 
 char *getJitPath();
-
-
 
 
 #endif //QCONTAINER_PRO_LIBPATH_H

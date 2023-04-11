@@ -83,8 +83,10 @@ target_link_libraries(
 
         utils
         raw_syscall
-
+        xunwind #栈回溯
         xdl
+        linkerHandler#处理linker相关的方法
+        findsyscall
 )
 
 

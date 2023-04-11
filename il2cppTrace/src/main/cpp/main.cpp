@@ -13,8 +13,9 @@
 #include <fstream>
 
 #include "parse.h"
-#include "linkerHandler.h"
 #include "adapter.h"
+
+#include "linker_callback.h"
 
 
 bool isTraceIl2cpp = false;
@@ -43,7 +44,7 @@ JNI_OnLoad(JavaVM *vm, [[maybe_unused]] void *reserved) {
         jobject ret2 = env->GetStaticObjectField(configClazz, id2);
         saveFilePath = env->GetStringUTFChars((jstring) ret2, nullptr);
         //hook linker ,wait for the il2cpp.so to load
-        linkerHandler::linkerCallBack(nullptr);
+        linkerCallBack::hookLinkerCallBack();
         LOG(INFO) << ">>>>>>>>>>>>  JNI_OnLoad load success ";
         LOG(ERROR) << "config Into isTraceIl2cpp -> " <<
                    (isTraceIl2cpp ? "[true] " : "[false] ") << saveFilePath;

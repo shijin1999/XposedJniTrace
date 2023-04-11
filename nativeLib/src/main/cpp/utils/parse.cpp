@@ -96,7 +96,19 @@ map<string, string> parse::jmap2cmap(JNIEnv *env, jobject jmap) {
 }
 
 
-
+std::list<string> parse::jlist2clist(JNIEnv *env, jobject jlist) {
+    std::list<std::string> clist;
+    jclass listClazz = env->FindClass("java/util/ArrayList");
+    jmethodID sizeMid = env->GetMethodID(listClazz, "size", "()I");
+    jint size = env->CallIntMethod(jlist, sizeMid);
+    jmethodID list_get = env->GetMethodID(listClazz, "get", "(I)Ljava/lang/Object;");
+    for (int i = 0; i < size; i++) {
+        jobject item = env->CallObjectMethod(jlist, list_get, i);
+        //末尾添加
+        clist.push_back(parse::jstring2str(env, (jstring) item));
+    }
+    return clist;
+}
 
 
 [[maybe_unused]] bool parse::jboolean2bool(jboolean value) {

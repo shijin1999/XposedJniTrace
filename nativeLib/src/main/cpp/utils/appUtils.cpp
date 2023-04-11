@@ -19,6 +19,24 @@ bool isSystemFile(const string& path){
            startWith(path, "/apex/") ;
 }
 
+
+string get_process_name_by_pid(int pid) {
+    // 构造进程文件名
+    std::stringstream filename;
+    filename << "/proc/" << pid << "/cmdline";
+    // 打开进程文件并读取进程名
+    std::ifstream file(filename.str());
+    if (file.is_open()) {
+        std::string process_name;
+        std::getline(file, process_name, '\0'); // 读取进程名直到遇到空字符 '\0'
+        file.close();
+        return process_name;
+    }
+    // 如果无法获取当前进程名，则返回空字符串
+    return {};
+}
+
+
 void getAllOpenFdInfo(){
 #define F_LEN 1024
 
@@ -51,8 +69,7 @@ void getAllOpenFdInfo(){
 
 
 void inline findSymBySo(size_t address, MapAddresInfo* info) {
-//    SandHook::ElfImg elfImg(info->fname);
-//    elfImg.getAddressSym(address, info);
+
 }
 
 
@@ -111,27 +128,20 @@ MapItemInfo getSoBaseAddress(const char *name) {
     size_t end = 0 ;
     bool isFirst = true;
     size_t len = 0;
-    char buffer[PATH_MAX];
-    memset(buffer, 0, PATH_MAX);
-    FILE *fp =fopen("/proc/self/maps", "r");
+    char buffer[PATH_MAX] = {0};
+    //读取的Maps不进行IO重定向
+    FILE *fp =fopen("/proc/self/abcd", "r");
     if(fp == nullptr){
-        LOGE("getSoBaseAddress open maps == null %s",name)
-        return info;
-    }
-    bool isDebugLog = false;
-    if(strstr(name,"libil2cpp.so")){
-        isDebugLog = true;
+        //找不到用原始文件
+        fp = fopen("/proc/self/maps", "r");
+        if(fp== nullptr){
+            return info;
+        }
     }
     char *line = nullptr;
     while (getline(&line, &len, fp) != -1) {
-        if(isDebugLog){
-            LOGE("%s",line)
-        }
         if (line!= nullptr&&strstr(line, name)) {
-            sscanf(line, "%lx-%lx",&start, &end);
-            if(StringUtils::endsWith(name,"libil2cpp.so")){
-                LOGE("mathch -> %s",line)
-            }
+            sscanf(line, "%lx-%lx %*s %*s %*s %*s %*s %*s", &start, &end);
             //start 只有第一次赋值
             if(isFirst){
                 info.start = start;
@@ -140,7 +150,10 @@ MapItemInfo getSoBaseAddress(const char *name) {
         }
     }
     info.end = end;
-    syscall(__NR_close, fp);
+    if (line != nullptr) {
+        free(line);
+    }
+    fclose(fp);
     //LOGE("get maps info start -> 0x%zx  end -> 0x%zx ",info.start,info.end);
     return info;
 }

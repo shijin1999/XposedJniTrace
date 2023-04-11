@@ -154,7 +154,10 @@ void *ElfImg::GetModuleBase(const char *name) {
     off_t load_addr;
     int found = 0;
     maps = fopen("/proc/self/maps", "r");
-
+//    maps = fopen("/proc/self/abcd", "r");
+//    if(maps == NULL){
+//        maps = fopen("/proc/self/maps", "r");
+//    }
     while (fgets(buff, sizeof(buff), maps)) {
         if ((strstr(buff, "r-xp") || strstr(buff, "r--p")) && strstr(buff, name)) {
             found = 1;
