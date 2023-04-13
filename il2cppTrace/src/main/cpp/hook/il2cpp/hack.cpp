@@ -19,6 +19,11 @@
 #include "logging.h"
 
 #include "xdl.h"
+#include "main.h"
+#include "HookUtils.h"
+#include "il2cpp-class.h"
+
+
 
 
 void hack_start(const char *path, const char *game_data_dir) {
@@ -28,8 +33,13 @@ void hack_start(const char *path, const char *game_data_dir) {
         return;
     }
     il2cpp_api_init(handle);
-    il2cpp_dump(game_data_dir);
-    LOG(INFO) << ">>>>>>>>>> il2cpp_dump is finish ";
+    if(isTraceIl2cpp){
+        //il2cpp_tracer(game_data_dir);
+        hook_invoke(handle,game_data_dir);
+    } else{
+        il2cpp_dump(game_data_dir);
+    }
+    xdl_close(handle);
 }
 
 

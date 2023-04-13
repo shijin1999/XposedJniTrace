@@ -9,4 +9,5 @@
 
 void hack_prepare(const char *filepath,const char *game_data_dir);
 
+
 #endif //ZYGISK_IL2CPPDUMPER_HACK_H

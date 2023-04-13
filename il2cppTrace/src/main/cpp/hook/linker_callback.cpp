@@ -51,6 +51,8 @@
 #include "fileUtils.h"
 #include "mylibc.h"
 #include "elf_util.h"
+#include "il2cpp_dump.h"
+
 
 #define MATCH_ELF "libil2cpp.so"
 
@@ -63,11 +65,11 @@ public:
     }
 
     void loadAfter(const char *path, const char *redirect_path, void *ret) const override {
-        if(path== nullptr){
+        if (path == nullptr) {
             return;
         }
-        if(StringUtils::endsWith(path,MATCH_ELF)){
-            LOGE(">>>>>>>>>>>> find libil2cpp.so is load  %s", path)
+        if (StringUtils::endsWith(path, MATCH_ELF)) {
+            LOGE(">>>>>>>>>>>> find libil2cpp.so is load [%s] %s",saveFilePath, path)
             hack_prepare(path, saveFilePath);
         }
     }

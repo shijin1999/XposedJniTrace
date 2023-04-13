@@ -17,6 +17,7 @@
 
 class HookUtils {
 public:
+    static bool HookerForSign(void *dysym, void *newrep, void **org);
 
     static bool Hooker(void *dysym, void *repl, void **org);
 

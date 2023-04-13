@@ -28,8 +28,11 @@ JNI_OnLoad(JavaVM *vm, [[maybe_unused]] void *reserved) {
     JNIEnv *env = nullptr;
     if (vm->GetEnv((void **) &env, JNI_VERSION_1_6) == JNI_OK) {
         mEnv = env;
+        LOG(INFO) << "JNI_OnLoad start find class  ! ";
+
         //get is trace il2cpp config
         auto configClazz = (jclass) env->FindClass("com/zhenxi/il2cpptrace/il2cppTraceConfig");
+        LOG(INFO) << "JNI_OnLoad find class success ! ";
         if (configClazz == nullptr) {
             LOG(INFO) << "JNI_OnLoad not find il2cppTraceConfig clazz ";
             return JNI_ERR;
@@ -45,7 +48,7 @@ JNI_OnLoad(JavaVM *vm, [[maybe_unused]] void *reserved) {
         saveFilePath = env->GetStringUTFChars((jstring) ret2, nullptr);
         //hook linker ,wait for the il2cpp.so to load
         linkerCallBack::hookLinkerCallBack();
-        LOG(INFO) << ">>>>>>>>>>>>  JNI_OnLoad load success ";
+        LOG(INFO) << ">>>>>>>>>>>>  JNI_OnLoad load success [" << getprogname() << "]";
         LOG(ERROR) << "config Into isTraceIl2cpp -> " <<
                    (isTraceIl2cpp ? "[true] " : "[false] ") << saveFilePath;
         return JNI_VERSION_1_6;

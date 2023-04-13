@@ -12,11 +12,14 @@
 #include <sstream>
 #include <fstream>
 #include <unistd.h>
+#include <list>
 
 #include "xdl.h"
 #include "ZhenxiLog.h"
 #include "il2cpp-tabledefs.h"
 #include "il2cpp-class.h"
+#include "HookUtils.h"
+#include "stringUtils.h"
 
 #define DO_API(r, n, p) r (*n) p
 
@@ -343,6 +346,217 @@ void il2cpp_api_init(void *handle) {
     il2cpp_thread_attach(domain);
 }
 
+using namespace std;
+
+static inline string getMethodInfo(const MethodInfo *method) {
+    if (method == nullptr) {
+        return {};
+    }
+    std::stringstream outPut;
+    uint32_t iflags = 0;
+    auto flags = il2cpp_method_get_flags(method, &iflags);
+    outPut << get_method_modifier(flags);
+    //TODO genericContainerIndex
+    auto return_type = il2cpp_method_get_return_type(method);
+    if (_il2cpp_type_is_byref(return_type)) {
+        outPut << "ref ";
+    }
+    auto return_class = il2cpp_class_from_type(return_type);
+    outPut << il2cpp_class_get_name(return_class) << " " << il2cpp_method_get_name(method)
+           << "(";
+    auto param_count = il2cpp_method_get_param_count(method);
+    for (int i = 0; i < param_count; ++i) {
+        auto param = il2cpp_method_get_param(method, i);
+        auto attrs = param->attrs;
+        if (_il2cpp_type_is_byref(param)) {
+            if (attrs & PARAM_ATTRIBUTE_OUT && !(attrs & PARAM_ATTRIBUTE_IN)) {
+                outPut << "out ";
+            } else if (attrs & PARAM_ATTRIBUTE_IN && !(attrs & PARAM_ATTRIBUTE_OUT)) {
+                outPut << "in ";
+            } else {
+                outPut << "ref ";
+            }
+        } else {
+            if (attrs & PARAM_ATTRIBUTE_IN) {
+                outPut << "[In] ";
+            }
+            if (attrs & PARAM_ATTRIBUTE_OUT) {
+                outPut << "[Out] ";
+            }
+        }
+        auto parameter_class = il2cpp_class_from_type(param);
+        outPut << il2cpp_class_get_name(parameter_class) << " "
+               << il2cpp_method_get_param_name(method, i);
+        outPut << ", ";
+    }
+    if (param_count > 0) {
+        outPut.seekp(-2, outPut.cur);
+    }
+    outPut << ") { }\n";
+    return outPut.str();
+}
+
+static std::ofstream *mOs = nullptr;
+static string saveDir = {};
+static bool isFinish = false;
+
+static list<const MethodInfo *> *ALL_METHOD_LIST = nullptr;
+
+
+HOOK_DEF(Il2CppObject*, il2cpp_runtime_invoke,
+         const MethodInfo *method, void *obj,
+         [[maybe_unused]] void **params, Il2CppException **exc) {
+    std::stringstream imageOutput;
+    auto *clazz = il2cpp_method_get_class(method);
+    if (clazz != nullptr) {
+        auto *image = il2cpp_class_get_image(clazz);
+        if (image != nullptr) {
+            imageOutput << "[" << il2cpp_image_get_name(image) << "] ";
+        }
+        imageOutput<<"[" << il2cpp_class_get_name(clazz) << "] ";
+    }
+    const string &methodInfo = getMethodInfo(method);
+    imageOutput << methodInfo;
+    auto pointer = method->methodPointer;
+    if (pointer) {
+        imageOutput << " 0x" << ((uint64_t) pointer - il2cpp_base);
+    }
+    imageOutput << "\n";
+    LOGE("%s", imageOutput.str().c_str())
+    //save file
+    *mOs << imageOutput.str();
+    return orig_il2cpp_runtime_invoke(method, obj, params, exc);
+}
+
+void hook_invoke(void *handle, const char *outDir) {
+    saveDir = std::string(outDir).append("FunIl2cpp_tracer.txt");
+    LOGI("il2cpp_tracer tracer... %s", saveDir.c_str())
+    if (mOs == nullptr) {
+        mOs = new std::ofstream(saveDir);
+    }
+    bool isSuccess = HookUtils::Hooker(
+            (void *) il2cpp_runtime_invoke,
+            (void *) new_il2cpp_runtime_invoke,
+            (void **) &orig_il2cpp_runtime_invoke);
+    LOGE("il2cpp_runtime_invoke hook finish  %d", isSuccess)
+}
+
+HOOK_DEF(void*, HookCallBackNoArgs) {
+    if (!isFinish) {
+        return orig_HookCallBackNoArgs();
+    }
+    if (ALL_METHOD_LIST == nullptr) {
+        return orig_HookCallBackNoArgs();
+    }
+
+    void *method_ptr = (void *) __builtin_return_address(0);
+    for (const auto &method: *ALL_METHOD_LIST) {
+        if (method->methodPointer && method_ptr) {
+            if (method->methodPointer == method_ptr) {
+                const string &methodInfo = getMethodInfo(method);
+                if (mOs == nullptr) {
+                    mOs = new std::ofstream(saveDir);
+                }
+                LOGE("tracer method info %s il2cpp base ->  %p", methodInfo.c_str(),
+                     (void *) il2cpp_base)
+                *mOs << methodInfo;
+                return orig_HookCallBackNoArgs();
+            }
+        }
+    }
+    return orig_HookCallBackNoArgs();
+}
+
+HOOK_DEF(void*, HookCallBack, va_list args) {
+    if (!isFinish) {
+        return orig_HookCallBack(args);
+    }
+    if (ALL_METHOD_LIST == nullptr) {
+        return orig_HookCallBack(args);
+    }
+    void *method_ptr = (void *) __builtin_return_address(0);
+    for (const auto &method: *ALL_METHOD_LIST) {
+        if (method->methodPointer && method_ptr) {
+            if (method->methodPointer == method_ptr) {
+                const string &methodInfo = getMethodInfo(method);
+                if (mOs == nullptr) {
+                    mOs = new std::ofstream(saveDir);
+                }
+                LOGE("tracer method info %s il2cpp base ->  %p", methodInfo.c_str(),
+                     (void *) il2cpp_base)
+                *mOs << methodInfo;
+                return orig_HookCallBack(args);
+            }
+        }
+    }
+    return orig_HookCallBack(args);
+}
+
+void il2cpp_tracer(const char *outDir) {
+    saveDir = std::string(outDir).append("FunIl2cpp_tracer.txt");
+    LOGI("il2cpp_tracer tracer... %s", saveDir.c_str())
+    if (ALL_METHOD_LIST == nullptr) {
+        ALL_METHOD_LIST = new list<const MethodInfo *>;
+    }
+    size_t size;
+    auto domain = il2cpp_domain_get();
+    LOGI("il2cpp_tracer init domain finish ")
+    auto assemblies = il2cpp_domain_get_assemblies(domain, &size);
+    LOGI("il2cpp_tracer init assemblies finish ")
+    if (il2cpp_image_get_class) {
+        LOGI("Version greater than 2018.3");
+        for (int i = 0; i < size; ++i) {
+            auto image = il2cpp_assembly_get_image(assemblies[i]);
+            auto imageName = il2cpp_image_get_name(image);
+            auto classCount = il2cpp_image_get_class_count(image);
+            for (int j = 0; j < classCount; ++j) {
+                auto tempKlass = il2cpp_image_get_class(image, j);
+                if (tempKlass == nullptr) {
+                    continue;
+                }
+                auto type = il2cpp_class_get_type(const_cast<Il2CppClass *>(tempKlass));
+                if (type == nullptr) {
+                    continue;
+                }
+                auto *klass = il2cpp_class_from_type(type);
+                if (klass == nullptr) {
+                    continue;
+                }
+                void *iter = nullptr;
+                while (auto method = il2cpp_class_get_methods(klass, &iter)) {
+                    auto pointer = method->methodPointer;
+                    if (pointer) {
+                        const string &methodInfo = getMethodInfo(method);
+                        //hook all method
+                        auto param_count = il2cpp_method_get_param_count(method);
+                        if (param_count > 0) {
+                            HookUtils::Hooker((void *) pointer,
+                                              (void *) new_HookCallBack,
+                                              (void **) &orig_HookCallBack
+                            );
+                        } else {
+                            HookUtils::Hooker((void *) pointer,
+                                              (void *) new_HookCallBackNoArgs,
+                                              (void **) &orig_HookCallBackNoArgs
+                            );
+                        }
+                        ALL_METHOD_LIST->push_back(method);
+                        LOGI("hook method success %lu %s ", ALL_METHOD_LIST->size(),
+                             methodInfo.c_str());
+
+                    }
+                    if (iter == nullptr) {
+                        break;
+                    }
+                }
+
+            }
+        }
+        isFinish = true;
+        LOGE("lister il2cpp finish method size  %lu  ", ALL_METHOD_LIST->size())
+    }
+}
+
 void il2cpp_dump(const char *outDir) {
     LOGI("dumping...");
     size_t size;
@@ -370,8 +584,7 @@ void il2cpp_dump(const char *outDir) {
                 outPuts.push_back(outPut);
             }
         }
-    }
-    else {
+    } else {
         LOGI("Version less than 2018.3");
         //使用反射
         auto corlib = il2cpp_get_corlib();
@@ -426,5 +639,5 @@ void il2cpp_dump(const char *outDir) {
         outStream << outPuts[i];
     }
     outStream.close();
-    LOGI("dump done! [%s]",outPath.c_str());
+    LOGI("dump done! [%s]", outPath.c_str());
 }

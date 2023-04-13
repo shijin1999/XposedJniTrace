@@ -38,6 +38,31 @@ bool HookUtils::unHook(void *sym) {
     }
     return ret;
 }
+
+#define PUT_PTR(dys) \
+    if(hookedList!= nullptr){ \
+        hookedList->push_back(dys); \
+    } \
+
+
+
+bool HookUtils::HookerForSign(void *dysym, void *newrep, void **org){
+    if (dysym == nullptr) {
+        LOG(ERROR) << "dobby hook org == null ";
+        return false;
+    }
+    if (hookedList == nullptr) {
+        hookedList = new list<void *>();
+    }
+    //如果这个地址已经被Hook了 。也有可能返回失败 。dobby 会提示 already been hooked 。
+    for (void *ptr: *hookedList) {
+        if (ptr == dysym) {
+            //如果保存了这个地址,说明之前hook成功过,我们也认为hook成功
+            return true;
+        }
+    }
+    return  SandHook::Inline::InlineHookImpl(dysym, newrep, org);
+}
 /**
  * Hook的整体封装,这个方法可以切换别的Hook框架
  * 先尝试用DobbyHook 如果Hook失败的话用InlineHook二次尝试
@@ -78,7 +103,7 @@ bool HookUtils::Hooker(void *dysym, void *newrep, void **org) {
     LOG(ERROR) << "zhenxi runtime inlinehook start sandhook InlineHookImpl  ";
     ret = SandHook::Inline::InlineHookImpl(dysym, newrep, org);
     if (ret) {
-        hookedList->push_back(dysym);
+        PUT_PTR(dysym)
         return true;
     }
 
@@ -96,7 +121,7 @@ bool HookUtils::Hooker(void *dysym, void *newrep, void **org) {
         LOG(ERROR) << "!!!!!!!!!!!!!!!  HookUtils hook error   ";
         return false;
     }
-    hookedList->push_back(dysym);
+    PUT_PTR(dysym)
     return ret;
 
 }

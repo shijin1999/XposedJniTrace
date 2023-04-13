@@ -2,6 +2,7 @@ apply plugin: 'com.android.application'
 apply plugin: 'stringfog'
 
 import com.github.megatronking.stringfog.plugin.kg.RandomKeyGenerator
+
 //import com.github.megatronking.stringfog.plugin.kg.HardCodeKeyGenerator
 
 stringfog {
@@ -37,7 +38,7 @@ android {
         }
         externalNativeBuild {
             cmake {
-                arguments "-DPROJECT_SO_NAME="+String.valueOf(project_name)
+                arguments "-DPROJECT_SO_NAME=" + String.valueOf(project_name)
             }
         }
         applicationVariants.all {
@@ -45,7 +46,7 @@ android {
                 variant.outputs.all {
                     if (buildType.name == 'release') {
                         def createTime = new Date().format("YYYY-MM-dd", TimeZone.getTimeZone("GMT+08:00"))
-                        outputFileName project_name+"_"+"v" + defaultConfig.versionName + "_" + createTime + "_" + buildType.name + ".apk"
+                        outputFileName project_name + "_" + "v" + defaultConfig.versionName + "_" + createTime + "_" + buildType.name + ".apk"
                     }
                 }
 
@@ -65,8 +66,8 @@ android {
             path "src/main/cpp/CMakeLists.txt"
         }
     }
-    sourceSets{
-        main{
+    sourceSets {
+        main {
             jniLibs.srcDirs = ['src/main/jniLibs']
             jni.srcDirs = []
         }
