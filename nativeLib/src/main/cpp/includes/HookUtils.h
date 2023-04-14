@@ -27,6 +27,8 @@ public:
 
     static bool Hooker(const char *libName, const char *dysym, void *repl, void **org);
 
+    static void startBranchTrampoline();
+
     static bool unHook(void *sym);
 
 };

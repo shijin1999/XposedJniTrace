@@ -28,11 +28,17 @@ find_library(
 add_subdirectory(${HomePath}/nativeLib/src/main/cpp/ nativeLib.out)
 
 add_subdirectory(sec)
+add_subdirectory(libffi)
 
 include_directories(
         ./
         ./includes/
+
+        ./libffi/
+        ./libffi/platform_include/
+
         ./hook/il2cpp/
+
         ${HomePath}/nativeLib/src/main/cpp/
         ${HomePath}/nativeLib/src/main/cpp/includes/
 )
@@ -87,6 +93,7 @@ target_link_libraries(
         xdl
         linkerHandler#处理linker相关的方法
         findsyscall
+        libffi
 )
 
 

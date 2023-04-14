@@ -44,7 +44,9 @@ bool HookUtils::unHook(void *sym) {
         hookedList->push_back(dys); \
     } \
 
-
+void HookUtils::startBranchTrampoline(){
+    dobby_enable_near_branch_trampoline();
+}
 
 bool HookUtils::HookerForSign(void *dysym, void *newrep, void **org){
     if (dysym == nullptr) {

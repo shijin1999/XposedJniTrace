@@ -70,7 +70,9 @@ public:
         }
         if (StringUtils::endsWith(path, MATCH_ELF)) {
             LOGE(">>>>>>>>>>>> find libil2cpp.so is load [%s] %s",saveFilePath, path)
-            hack_prepare(path, saveFilePath);
+            if(StringUtils::equals(getprogname(),"com.dianhun.remeberM3G")){
+                hack_prepare(path, saveFilePath);
+            }
         }
     }
 };

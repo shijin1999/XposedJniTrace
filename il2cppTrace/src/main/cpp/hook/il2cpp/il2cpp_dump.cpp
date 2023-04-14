@@ -20,6 +20,11 @@
 #include "il2cpp-class.h"
 #include "HookUtils.h"
 #include "stringUtils.h"
+#include "mylibc.h"
+#include "ffi.h"
+#include "ffi_cxx.h"
+#include <sys/mman.h>
+
 
 #define DO_API(r, n, p) r (*n) p
 
@@ -348,7 +353,7 @@ void il2cpp_api_init(void *handle) {
 
 using namespace std;
 
-static inline string getMethodInfo(const MethodInfo *method) {
+static  string getMethodInfo(const MethodInfo *method) {
     if (method == nullptr) {
         return {};
     }
@@ -400,9 +405,6 @@ static std::ofstream *mOs = nullptr;
 static string saveDir = {};
 static bool isFinish = false;
 
-static list<const MethodInfo *> *ALL_METHOD_LIST = nullptr;
-
-
 HOOK_DEF(Il2CppObject*, il2cpp_runtime_invoke,
          const MethodInfo *method, void *obj,
          [[maybe_unused]] void **params, Il2CppException **exc) {
@@ -413,7 +415,7 @@ HOOK_DEF(Il2CppObject*, il2cpp_runtime_invoke,
         if (image != nullptr) {
             imageOutput << "[" << il2cpp_image_get_name(image) << "] ";
         }
-        imageOutput<<"[" << il2cpp_class_get_name(clazz) << "] ";
+        imageOutput << "[" << il2cpp_class_get_name(clazz) << "] ";
     }
     const string &methodInfo = getMethodInfo(method);
     imageOutput << methodInfo;
@@ -441,119 +443,139 @@ void hook_invoke(void *handle, const char *outDir) {
     LOGE("il2cpp_runtime_invoke hook finish  %d", isSuccess)
 }
 
-HOOK_DEF(void*, HookCallBackNoArgs) {
-    if (!isFinish) {
-        return orig_HookCallBackNoArgs();
-    }
-    if (ALL_METHOD_LIST == nullptr) {
-        return orig_HookCallBackNoArgs();
-    }
 
-    void *method_ptr = (void *) __builtin_return_address(0);
-    for (const auto &method: *ALL_METHOD_LIST) {
-        if (method->methodPointer && method_ptr) {
-            if (method->methodPointer == method_ptr) {
-                const string &methodInfo = getMethodInfo(method);
-                if (mOs == nullptr) {
-                    mOs = new std::ofstream(saveDir);
-                }
-                LOGE("tracer method info %s il2cpp base ->  %p", methodInfo.c_str(),
-                     (void *) il2cpp_base)
-                *mOs << methodInfo;
-                return orig_HookCallBackNoArgs();
-            }
+
+
+// 将 IL2CPP 类型转换为 libffi 类型
+ffi_type *il2cpp_type_to_ffi_type(const Il2CppType *type) {
+    switch (type->type) {
+        case IL2CPP_TYPE_VOID:
+            return &ffi_type_void;
+        case IL2CPP_TYPE_BOOLEAN:
+            return &ffi_type_uint8;
+        case IL2CPP_TYPE_CHAR:
+            return &ffi_type_sint16;
+        case IL2CPP_TYPE_I1:
+            return &ffi_type_sint8;
+        case IL2CPP_TYPE_U1:
+            return &ffi_type_uint8;
+        case IL2CPP_TYPE_I2:
+            return &ffi_type_sint16;
+        case IL2CPP_TYPE_U2:
+            return &ffi_type_uint16;
+        case IL2CPP_TYPE_I4:
+            return &ffi_type_sint32;
+        case IL2CPP_TYPE_U4:
+            return &ffi_type_uint32;
+        case IL2CPP_TYPE_I8:
+            return &ffi_type_sint64;
+        case IL2CPP_TYPE_U8:
+            return &ffi_type_uint64;
+        case IL2CPP_TYPE_R4:
+            return &ffi_type_float;
+        case IL2CPP_TYPE_R8:
+            return &ffi_type_double;
+        case IL2CPP_TYPE_STRING:
+        case IL2CPP_TYPE_CLASS:
+        case IL2CPP_TYPE_OBJECT:
+        case IL2CPP_TYPE_ARRAY:
+        case IL2CPP_TYPE_SZARRAY:
+            return &ffi_type_pointer;
+        default:{
+            return &ffi_type_void;
         }
     }
-    return orig_HookCallBackNoArgs();
 }
 
-HOOK_DEF(void*, HookCallBack, va_list args) {
-    if (!isFinish) {
-        return orig_HookCallBack(args);
-    }
-    if (ALL_METHOD_LIST == nullptr) {
-        return orig_HookCallBack(args);
-    }
-    void *method_ptr = (void *) __builtin_return_address(0);
-    for (const auto &method: *ALL_METHOD_LIST) {
-        if (method->methodPointer && method_ptr) {
-            if (method->methodPointer == method_ptr) {
-                const string &methodInfo = getMethodInfo(method);
-                if (mOs == nullptr) {
-                    mOs = new std::ofstream(saveDir);
-                }
-                LOGE("tracer method info %s il2cpp base ->  %p", methodInfo.c_str(),
-                     (void *) il2cpp_base)
-                *mOs << methodInfo;
-                return orig_HookCallBack(args);
-            }
-        }
-    }
-    return orig_HookCallBack(args);
-}
 
+static void ffi_closure_func(ffi_cif *cif, void *ret, void **args, void *user_data) {
+    for (size_t i = 0; i < cif->nargs; ++i) {
+        LOGD("ffi_closure_func: arg[%zu] type = %d", i, (int)cif->arg_types[i]->type);
+    }
+    auto method = static_cast<MethodInfo *>(user_data);
+    // 记录调用信息
+    LOGI("Method called: %s", getMethodInfo(method).c_str());
+    // 调用原始方法
+    ffi_call(cif, method->methodPointer, ret, args);
+}
+ffi_type **get_ffi_arg_types(const MethodInfo *method,uint32_t param_count) {
+    auto **arg_types = static_cast<ffi_type **>
+            (malloc(sizeof(ffi_type *) * param_count));
+    for (int i = 0; i < param_count; ++i) {
+        const Il2CppType *param_type = il2cpp_method_get_param(method, i);
+        arg_types[i] = il2cpp_type_to_ffi_type(param_type);
+        LOGD("get_ffi_arg_types: arg_type[%d] = %d", i, (int)arg_types[i]->type);
+    }
+    return arg_types;
+}
+// 获取 IL2CPP 方法的返回类型（以 libffi 的 ffi_type 结构表示）
+ffi_type *get_ffi_ret_type(const MethodInfo *method) {
+    const Il2CppType *ret_type = il2cpp_method_get_return_type(method);
+    return il2cpp_type_to_ffi_type(ret_type);
+}
+static size_t hookSize = 0;
 void il2cpp_tracer(const char *outDir) {
     saveDir = std::string(outDir).append("FunIl2cpp_tracer.txt");
     LOGI("il2cpp_tracer tracer... %s", saveDir.c_str())
-    if (ALL_METHOD_LIST == nullptr) {
-        ALL_METHOD_LIST = new list<const MethodInfo *>;
-    }
     size_t size;
     auto domain = il2cpp_domain_get();
-    LOGI("il2cpp_tracer init domain finish ")
     auto assemblies = il2cpp_domain_get_assemblies(domain, &size);
-    LOGI("il2cpp_tracer init assemblies finish ")
     if (il2cpp_image_get_class) {
-        LOGI("Version greater than 2018.3");
+        hookSize = 0;
         for (int i = 0; i < size; ++i) {
             auto image = il2cpp_assembly_get_image(assemblies[i]);
             auto imageName = il2cpp_image_get_name(image);
             auto classCount = il2cpp_image_get_class_count(image);
             for (int j = 0; j < classCount; ++j) {
                 auto tempKlass = il2cpp_image_get_class(image, j);
-                if (tempKlass == nullptr) {
-                    continue;
-                }
                 auto type = il2cpp_class_get_type(const_cast<Il2CppClass *>(tempKlass));
-                if (type == nullptr) {
-                    continue;
-                }
                 auto *klass = il2cpp_class_from_type(type);
-                if (klass == nullptr) {
-                    continue;
-                }
                 void *iter = nullptr;
                 while (auto method = il2cpp_class_get_methods(klass, &iter)) {
                     auto pointer = method->methodPointer;
                     if (pointer) {
                         const string &methodInfo = getMethodInfo(method);
-                        //hook all method
+                        const char *clazzName = il2cpp_class_get_name(klass);
                         auto param_count = il2cpp_method_get_param_count(method);
-                        if (param_count > 0) {
-                            HookUtils::Hooker((void *) pointer,
-                                              (void *) new_HookCallBack,
-                                              (void **) &orig_HookCallBack
-                            );
-                        } else {
-                            HookUtils::Hooker((void *) pointer,
-                                              (void *) new_HookCallBackNoArgs,
-                                              (void **) &orig_HookCallBackNoArgs
-                            );
+                        if (StringUtils::contains(methodInfo, "Hero")) {
+                            auto methodInfoStr = string(clazzName) + " " + methodInfo;
+                            // 动态生成Hook替换函数,使用libffi 闭包
+                            ffi_closure *closure;
+                            void *closure_func;
+                            closure = static_cast<ffi_closure *>(ffi_closure_alloc(sizeof(ffi_closure), &closure_func));
+                            if(closure == nullptr){
+                                continue;
+                            }
+                            // 获取参数类型和返回类型
+                            ffi_type **arg_types = get_ffi_arg_types(method,param_count);
+                            ffi_type *ret_type = get_ffi_ret_type(method);
+                            // 准备 libffi 的 cif
+                            ffi_cif cif;
+                            //c# this
+                            ffi_prep_cif(&cif, FFI_DEFAULT_ABI, param_count, ret_type, arg_types);
+                            // 准备闭包
+                            ffi_status status = ffi_prep_closure_loc
+                                    (closure, &cif, ffi_closure_func, (void*)method, closure_func);
+                            if (status == FFI_OK) {
+                                bool isSuccess = HookUtils::Hooker(
+                                        (void *) pointer,(void *) closure_func,nullptr);
+                                if(isSuccess){
+                                    hookSize++;
+                                }
+                                LOGE("hook method info success  %s  size-> %zu"
+                                     ,methodInfoStr.c_str(),hookSize)
+                            } else {
+                                LOGE("Failed to prepare closure for: %s", methodInfoStr.c_str())
+                            }
                         }
-                        ALL_METHOD_LIST->push_back(method);
-                        LOGI("hook method success %lu %s ", ALL_METHOD_LIST->size(),
-                             methodInfo.c_str());
-
                     }
                     if (iter == nullptr) {
                         break;
                     }
                 }
-
             }
         }
-        isFinish = true;
-        LOGE("lister il2cpp finish method size  %lu  ", ALL_METHOD_LIST->size())
+        LOGE("hook finish %zu ",hookSize)
     }
 }
 
