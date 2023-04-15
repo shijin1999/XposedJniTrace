@@ -69,13 +69,12 @@ public:
             return;
         }
         if (StringUtils::endsWith(path, MATCH_ELF)) {
-            LOGE(">>>>>>>>>>>> find libil2cpp.so is load [%s] %s",saveFilePath, path)
-            if(StringUtils::equals(getprogname(),"com.dianhun.remeberM3G")){
-                hack_prepare(path, saveFilePath);
-            }
+            LOGE(">>>>>>>>>>>> find libil2cpp.so is load [%s] %s", saveFilePath, path)
+            hack_prepare(path, saveFilePath);
         }
     }
 };
+
 void linkerCallBack::hookLinkerCallBack() {
     ZhenxiRunTime::linkerHandler::init();
     ZhenxiRunTime::linkerHandler::addLinkerCallBack(new FunJniLinkerCallBack());

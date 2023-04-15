@@ -34,8 +34,8 @@ void hack_start(const char *path, const char *game_data_dir) {
     }
     il2cpp_api_init(handle);
     if(isTraceIl2cpp){
-        il2cpp_tracer(game_data_dir);
-        //hook_invoke(handle,game_data_dir);
+        //il2cpp_tracer(game_data_dir);
+        hook_invoke(handle,game_data_dir);
     } else{
         il2cpp_dump(game_data_dir);
     }
