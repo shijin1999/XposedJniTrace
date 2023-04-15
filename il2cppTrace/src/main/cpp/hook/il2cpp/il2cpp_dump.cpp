@@ -13,6 +13,7 @@
 #include <fstream>
 #include <unistd.h>
 #include <list>
+#include <memory>
 
 #include "xdl.h"
 #include "ZhenxiLog.h"
@@ -353,6 +354,91 @@ void il2cpp_api_init(void *handle) {
 
 using namespace std;
 
+void il2cpp_dump(const char *outDir) {
+    LOGI("dumping...");
+    size_t size;
+    auto domain = il2cpp_domain_get();
+    auto assemblies = il2cpp_domain_get_assemblies(domain, &size);
+    std::stringstream imageOutput;
+    for (int i = 0; i < size; ++i) {
+        auto image = il2cpp_assembly_get_image(assemblies[i]);
+        imageOutput << "// Image " << i << ": " << il2cpp_image_get_name(image) << "\n";
+    }
+    std::vector<std::string> outPuts;
+    if (il2cpp_image_get_class) {
+        LOGI("Version greater than 2018.3");
+        //使用il2cpp_image_get_class
+        for (int i = 0; i < size; ++i) {
+            auto image = il2cpp_assembly_get_image(assemblies[i]);
+            std::stringstream imageStr;
+            imageStr << "\n// Dll : " << il2cpp_image_get_name(image);
+            auto classCount = il2cpp_image_get_class_count(image);
+            for (int j = 0; j < classCount; ++j) {
+                auto klass = il2cpp_image_get_class(image, j);
+                auto type = il2cpp_class_get_type(const_cast<Il2CppClass *>(klass));
+                //LOGD("type name : %s", il2cpp_type_get_name(type));
+                auto outPut = imageStr.str() + dump_type(type);
+                outPuts.push_back(outPut);
+            }
+        }
+    } else {
+        LOGI("Version less than 2018.3");
+        //使用反射
+        auto corlib = il2cpp_get_corlib();
+        auto assemblyClass = il2cpp_class_from_name(corlib, "System.Reflection", "Assembly");
+        auto assemblyLoad = il2cpp_class_get_method_from_name(assemblyClass, "Load", 1);
+        auto assemblyGetTypes = il2cpp_class_get_method_from_name(assemblyClass, "GetTypes", 0);
+        if (assemblyLoad && assemblyLoad->methodPointer) {
+            LOGI("Assembly::Load: %p", assemblyLoad->methodPointer);
+        } else {
+            LOGI("miss Assembly::Load");
+            return;
+        }
+        if (assemblyGetTypes && assemblyGetTypes->methodPointer) {
+            LOGI("Assembly::GetTypes: %p", assemblyGetTypes->methodPointer);
+        } else {
+            LOGI("miss Assembly::GetTypes");
+            return;
+        }
+        typedef void *(*Assembly_Load_ftn)(void *, Il2CppString *, void *);
+        typedef Il2CppArray *(*Assembly_GetTypes_ftn)(void *, void *);
+        for (int i = 0; i < size; ++i) {
+            auto image = il2cpp_assembly_get_image(assemblies[i]);
+            std::stringstream imageStr;
+            auto image_name = il2cpp_image_get_name(image);
+            imageStr << "\n// Dll : " << image_name;
+            //LOGD("image name : %s", image->name);
+            auto imageName = std::string(image_name);
+            auto pos = imageName.rfind('.');
+            auto imageNameNoExt = imageName.substr(0, pos);
+            auto assemblyFileName = il2cpp_string_new(imageNameNoExt.data());
+            auto reflectionAssembly = ((Assembly_Load_ftn) assemblyLoad->methodPointer)(nullptr,
+                                                                                        assemblyFileName,
+                                                                                        nullptr);
+            auto reflectionTypes = ((Assembly_GetTypes_ftn) assemblyGetTypes->methodPointer)(
+                    reflectionAssembly, nullptr);
+            auto items = reflectionTypes->vector;
+            for (int j = 0; j < reflectionTypes->max_length; ++j) {
+                auto klass = il2cpp_class_from_system_type((Il2CppReflectionType *) items[j]);
+                auto type = il2cpp_class_get_type(klass);
+                //LOGD("type name : %s", il2cpp_type_get_name(type));
+                auto outPut = imageStr.str() + dump_type(type);
+                outPuts.push_back(outPut);
+            }
+        }
+    }
+    LOGI("write dump file");
+    auto outPath = std::string(outDir).append("FunIl2cpp_dump.cs");
+    std::ofstream outStream(outPath);
+    outStream << imageOutput.str();
+    auto count = outPuts.size();
+    for (int i = 0; i < count; ++i) {
+        outStream << outPuts[i];
+    }
+    outStream.close();
+    LOGI("dump done! [%s]", outPath.c_str());
+}
+
 static  string getMethodInfo(const MethodInfo *method) {
     if (method == nullptr) {
         return {};
@@ -445,7 +531,7 @@ void hook_invoke(void *handle, const char *outDir) {
 
 
 
-
+static size_t hookSize = 0;
 // 将 IL2CPP 类型转换为 libffi 类型
 ffi_type *il2cpp_type_to_ffi_type(const Il2CppType *type) {
     switch (type->type) {
@@ -486,8 +572,6 @@ ffi_type *il2cpp_type_to_ffi_type(const Il2CppType *type) {
         }
     }
 }
-
-
 static void ffi_closure_func(ffi_cif *cif, void *ret, void **args, void *user_data) {
     for (size_t i = 0; i < cif->nargs; ++i) {
         LOGD("ffi_closure_func: arg[%zu] type = %d", i, (int)cif->arg_types[i]->type);
@@ -499,12 +583,23 @@ static void ffi_closure_func(ffi_cif *cif, void *ret, void **args, void *user_da
     ffi_call(cif, method->methodPointer, ret, args);
 }
 ffi_type **get_ffi_arg_types(const MethodInfo *method,uint32_t param_count) {
+    uint32_t iflags = 0;
+    auto flags = il2cpp_method_get_flags(method, &iflags);
+    bool is_instance_method = (flags & METHOD_ATTRIBUTE_STATIC) == 0;
     auto **arg_types = static_cast<ffi_type **>
             (malloc(sizeof(ffi_type *) * param_count));
+    if(arg_types== nullptr){
+        return nullptr;
+    }
+    int offset = 0;
+    if (is_instance_method) {
+        arg_types[0] = &ffi_type_pointer;
+        offset = 1;
+    }
     for (int i = 0; i < param_count; ++i) {
         const Il2CppType *param_type = il2cpp_method_get_param(method, i);
-        arg_types[i] = il2cpp_type_to_ffi_type(param_type);
-        LOGD("get_ffi_arg_types: arg_type[%d] = %d", i, (int)arg_types[i]->type);
+        arg_types[i + offset] = il2cpp_type_to_ffi_type(param_type);
+        LOGD("get_ffi_arg_types: arg_type[%d] = %d", i + offset, (int)arg_types[i + offset]->type);
     }
     return arg_types;
 }
@@ -513,8 +608,58 @@ ffi_type *get_ffi_ret_type(const MethodInfo *method) {
     const Il2CppType *ret_type = il2cpp_method_get_return_type(method);
     return il2cpp_type_to_ffi_type(ret_type);
 }
-static size_t hookSize = 0;
+
+
+
+std::unique_ptr<ffi_closure, void (*)(void *)> create_ffi_closure(ffi_cif *cif, void *user_data) {
+    ffi_closure *closure;
+    void *closure_func;
+
+    closure = static_cast<ffi_closure *>(ffi_closure_alloc(sizeof(ffi_closure), &closure_func));
+    if (!closure) {
+        LOGE("Failed to allocate closure");
+        return {nullptr, [](void *) {}};
+    }
+
+    ffi_status status = ffi_prep_closure_loc(closure, cif, ffi_closure_func, user_data, closure_func);
+    if (status != FFI_OK) {
+        LOGE("Failed to prepare closure");
+        ffi_closure_free(closure);
+        return {nullptr, [](void *) {}};
+    }
+    return {closure, ffi_closure_free};
+}
+
+bool hook_il2cpp_method(const MethodInfo *method, void *pointer) {
+    uint32_t param_count = il2cpp_method_get_param_count(method);
+    std::unique_ptr<ffi_type *[], void (*)(void *)> arg_types(get_ffi_arg_types(method, param_count), free);
+
+    if (!arg_types) {
+        LOGE("Failed to allocate arg_types array");
+        return false;
+    }
+
+    ffi_type *ret_type = get_ffi_ret_type(method);
+
+    ffi_cif cif;
+    ffi_prep_cif(&cif, FFI_DEFAULT_ABI, param_count, ret_type, arg_types.get());
+
+    auto closure = create_ffi_closure(&cif, (void *)method);
+    if (!closure) {
+        LOGE("Failed to create closure");
+        return false;
+    }
+
+    bool isSuccess = HookUtils::Hooker(pointer, closure.get(), nullptr);
+    if (isSuccess) {
+        hookSize++;
+    }
+
+    return isSuccess;
+}
+
 void il2cpp_tracer(const char *outDir) {
+    //HookUtils::startBranchTrampoline();
     saveDir = std::string(outDir).append("FunIl2cpp_tracer.txt");
     LOGI("il2cpp_tracer tracer... %s", saveDir.c_str())
     size_t size;
@@ -536,36 +681,12 @@ void il2cpp_tracer(const char *outDir) {
                     if (pointer) {
                         const string &methodInfo = getMethodInfo(method);
                         const char *clazzName = il2cpp_class_get_name(klass);
-                        auto param_count = il2cpp_method_get_param_count(method);
                         if (StringUtils::contains(methodInfo, "Hero")) {
                             auto methodInfoStr = string(clazzName) + " " + methodInfo;
-                            // 动态生成Hook替换函数,使用libffi 闭包
-                            ffi_closure *closure;
-                            void *closure_func;
-                            closure = static_cast<ffi_closure *>(ffi_closure_alloc(sizeof(ffi_closure), &closure_func));
-                            if(closure == nullptr){
-                                continue;
-                            }
-                            // 获取参数类型和返回类型
-                            ffi_type **arg_types = get_ffi_arg_types(method,param_count);
-                            ffi_type *ret_type = get_ffi_ret_type(method);
-                            // 准备 libffi 的 cif
-                            ffi_cif cif;
-                            //c# this
-                            ffi_prep_cif(&cif, FFI_DEFAULT_ABI, param_count, ret_type, arg_types);
-                            // 准备闭包
-                            ffi_status status = ffi_prep_closure_loc
-                                    (closure, &cif, ffi_closure_func, (void*)method, closure_func);
-                            if (status == FFI_OK) {
-                                bool isSuccess = HookUtils::Hooker(
-                                        (void *) pointer,(void *) closure_func,nullptr);
-                                if(isSuccess){
-                                    hookSize++;
-                                }
-                                LOGE("hook method info success  %s  size-> %zu"
-                                     ,methodInfoStr.c_str(),hookSize)
+                            if (hook_il2cpp_method(method, (void *) pointer)) {
+                                LOGI("hook method info success  %s  size-> %zu", methodInfoStr.c_str(), hookSize);
                             } else {
-                                LOGE("Failed to prepare closure for: %s", methodInfoStr.c_str())
+                                LOGE("Failed to hook method: %s", methodInfoStr.c_str());
                             }
                         }
                     }
@@ -579,87 +700,3 @@ void il2cpp_tracer(const char *outDir) {
     }
 }
 
-void il2cpp_dump(const char *outDir) {
-    LOGI("dumping...");
-    size_t size;
-    auto domain = il2cpp_domain_get();
-    auto assemblies = il2cpp_domain_get_assemblies(domain, &size);
-    std::stringstream imageOutput;
-    for (int i = 0; i < size; ++i) {
-        auto image = il2cpp_assembly_get_image(assemblies[i]);
-        imageOutput << "// Image " << i << ": " << il2cpp_image_get_name(image) << "\n";
-    }
-    std::vector<std::string> outPuts;
-    if (il2cpp_image_get_class) {
-        LOGI("Version greater than 2018.3");
-        //使用il2cpp_image_get_class
-        for (int i = 0; i < size; ++i) {
-            auto image = il2cpp_assembly_get_image(assemblies[i]);
-            std::stringstream imageStr;
-            imageStr << "\n// Dll : " << il2cpp_image_get_name(image);
-            auto classCount = il2cpp_image_get_class_count(image);
-            for (int j = 0; j < classCount; ++j) {
-                auto klass = il2cpp_image_get_class(image, j);
-                auto type = il2cpp_class_get_type(const_cast<Il2CppClass *>(klass));
-                //LOGD("type name : %s", il2cpp_type_get_name(type));
-                auto outPut = imageStr.str() + dump_type(type);
-                outPuts.push_back(outPut);
-            }
-        }
-    } else {
-        LOGI("Version less than 2018.3");
-        //使用反射
-        auto corlib = il2cpp_get_corlib();
-        auto assemblyClass = il2cpp_class_from_name(corlib, "System.Reflection", "Assembly");
-        auto assemblyLoad = il2cpp_class_get_method_from_name(assemblyClass, "Load", 1);
-        auto assemblyGetTypes = il2cpp_class_get_method_from_name(assemblyClass, "GetTypes", 0);
-        if (assemblyLoad && assemblyLoad->methodPointer) {
-            LOGI("Assembly::Load: %p", assemblyLoad->methodPointer);
-        } else {
-            LOGI("miss Assembly::Load");
-            return;
-        }
-        if (assemblyGetTypes && assemblyGetTypes->methodPointer) {
-            LOGI("Assembly::GetTypes: %p", assemblyGetTypes->methodPointer);
-        } else {
-            LOGI("miss Assembly::GetTypes");
-            return;
-        }
-        typedef void *(*Assembly_Load_ftn)(void *, Il2CppString *, void *);
-        typedef Il2CppArray *(*Assembly_GetTypes_ftn)(void *, void *);
-        for (int i = 0; i < size; ++i) {
-            auto image = il2cpp_assembly_get_image(assemblies[i]);
-            std::stringstream imageStr;
-            auto image_name = il2cpp_image_get_name(image);
-            imageStr << "\n// Dll : " << image_name;
-            //LOGD("image name : %s", image->name);
-            auto imageName = std::string(image_name);
-            auto pos = imageName.rfind('.');
-            auto imageNameNoExt = imageName.substr(0, pos);
-            auto assemblyFileName = il2cpp_string_new(imageNameNoExt.data());
-            auto reflectionAssembly = ((Assembly_Load_ftn) assemblyLoad->methodPointer)(nullptr,
-                                                                                        assemblyFileName,
-                                                                                        nullptr);
-            auto reflectionTypes = ((Assembly_GetTypes_ftn) assemblyGetTypes->methodPointer)(
-                    reflectionAssembly, nullptr);
-            auto items = reflectionTypes->vector;
-            for (int j = 0; j < reflectionTypes->max_length; ++j) {
-                auto klass = il2cpp_class_from_system_type((Il2CppReflectionType *) items[j]);
-                auto type = il2cpp_class_get_type(klass);
-                //LOGD("type name : %s", il2cpp_type_get_name(type));
-                auto outPut = imageStr.str() + dump_type(type);
-                outPuts.push_back(outPut);
-            }
-        }
-    }
-    LOGI("write dump file");
-    auto outPath = std::string(outDir).append("FunIl2cpp_dump.cs");
-    std::ofstream outStream(outPath);
-    outStream << imageOutput.str();
-    auto count = outPuts.size();
-    for (int i = 0; i < count; ++i) {
-        outStream << outPuts[i];
-    }
-    outStream.close();
-    LOGI("dump done! [%s]", outPath.c_str());
-}
