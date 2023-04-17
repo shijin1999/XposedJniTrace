@@ -89,9 +89,6 @@ public class LHook implements IXposedHookLoadPackage, IXposedHookZygoteInit {
 
     private static final ArrayList<String> mFilterList = new ArrayList<>();
 
-    private static final ArrayList<String> mFunctionList = new ArrayList<>();
-
-
     private static boolean isInit = false;
 
     private static String systemIntoPath = null;
@@ -100,6 +97,7 @@ public class LHook implements IXposedHookLoadPackage, IXposedHookZygoteInit {
         if (configJson == null || configJson.length() == 0 || configJson.equals(DEF_VALUE)) {
             return;
         }
+        mFilterList.clear();
         try {
             JSONObject json = new JSONObject(configJson);
             mTagPackageName = json.optString(PACKAGE_NAME, DEF_VALUE);
@@ -107,21 +105,6 @@ public class LHook implements IXposedHookLoadPackage, IXposedHookZygoteInit {
             mSaveTime = json.optLong(SAVE_TIME, 0L);
             isIl2cppTrace = json.optBoolean(IS_Il2CPPTRACE, false);
             isSystemLoadInto = json.optBoolean(IS_SYSTEM_LOAD_INTO, false);
-            String functionList = json.optString(LIST_OF_FUNCTIONS, DEF_VALUE);
-            //CLog.e("json get function list str info -> " + functionList);
-            if (!functionList.equals(DEF_VALUE)) {
-                ArrayList<?> arrayList = GsonUtils.str2obj(functionList, ArrayList.class);
-                if (arrayList != null) {
-                    CLog.e("function list get info -> " + arrayList);
-                    for (Object obj : arrayList) {
-                        String item = String.valueOf(obj);
-                        //CLog.e("function list add  " + obj);
-                        mFunctionList.add(item);
-                    }
-                } else {
-                    CLog.e("function list  == null !!!!!!!");
-                }
-            }
 
             isListenAll = json.optBoolean(IS_LISTEN_TO_ALL, false);
             if (!isListenAll) {
@@ -143,7 +126,8 @@ public class LHook implements IXposedHookLoadPackage, IXposedHookZygoteInit {
                 systemIntoPath = json.optString(SYSTEM_INTO_PATH, DEF_VALUE);
                 CLog.i("into system path -> " + systemIntoPath);
             }
-        } catch (Throwable e) {
+        }
+        catch (Throwable e) {
             CLog.e("initConfigData error " + e, e);
         }
     }
@@ -238,7 +222,9 @@ public class LHook implements IXposedHookLoadPackage, IXposedHookZygoteInit {
                     classloader,
                     mModuleBaseApkPath,
                     systemIntoPath,
-                    isIl2cppTrace
+                    isIl2cppTrace,
+                    isListenAll,
+                    mFilterList
             );
         } catch (Throwable e) {
             CLog.e("initSo error " + e, e);

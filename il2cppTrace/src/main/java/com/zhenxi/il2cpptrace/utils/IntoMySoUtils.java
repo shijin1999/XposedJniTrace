@@ -162,7 +162,10 @@ public class IntoMySoUtils {
                                        ClassLoader so_classloader,
                                        String intoSoPath,
                                        String systemPath,
-                                       boolean isIl2cppTrace) {
+                                       boolean isIl2cppTrace,
+                                       boolean isHookAllMethod,
+                                       ArrayList<String> fit_list
+    ) {
         CLog.i("start initMySoForName " + name
                 + " [" + so_classloader.getClass().getName() + "]");
         CLog.i("initMySoForName into path ->" + intoSoPath);
@@ -197,7 +200,10 @@ public class IntoMySoUtils {
             Object hackSaveFilePath =
                     XposedHelpers.getStaticObjectField(clazz, "hackSaveFilePath");
             CLog.i("init&set funIl2cpp config success, save path ->  " + hackSaveFilePath);
-
+            if(isHookAllMethod) {
+                XposedHelpers.setStaticBooleanField(clazz, "isTraceAllMethod", true);
+            }
+            XposedHelpers.setStaticObjectField(clazz, "TracerMethodList", fit_list);
             String path;
             if (systemPath == null || systemPath.equals(DEF_VALUE)) {
                 //本地路径

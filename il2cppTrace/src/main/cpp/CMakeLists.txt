@@ -94,6 +94,7 @@ target_link_libraries(
         linkerHandler#处理linker相关的方法
         findsyscall
         libffi
+        dobby
 )
 
 

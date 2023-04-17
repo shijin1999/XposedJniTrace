@@ -1,22 +1,31 @@
 package com.zhenxi.il2cpptrace.adapter;
 
+import static com.zhenxi.il2cpptrace.config.ConfigKey.FILTER_LIST;
+import static com.zhenxi.il2cpptrace.config.ConfigKey.IS_LISTEN_TO_ALL;
+import static com.zhenxi.il2cpptrace.config.ConfigKey.LIST_OF_FUNCTIONS;
+
 import android.content.Context;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
+import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.BaseAdapter;
 import android.widget.CheckBox;
+import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
+
+import androidx.appcompat.app.AlertDialog;
 
 import com.zhenxi.il2cpptrace.bean.AppBean;
 import com.zhenxi.il2cpptrace.config.ConfigKey;
 import com.zhenxi.il2cpptrace.utils.CLog;
 import com.zhenxi.il2cpptrace.utils.Constants;
 import com.zhenxi.il2cpptrace.utils.FileUtils;
+import com.zhenxi.il2cpptrace.utils.GsonUtils;
 import com.zhenxi.il2cpptrace.utils.IntoMySoUtils;
 import com.zhenxi.il2cpptrace.utils.RootUtils;
 import com.zhenxi.il2cpptrace.utils.SpUtil;
@@ -26,6 +35,7 @@ import com.zhenxi.il2cpptrace.R;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Arrays;
 
 
 import org.json.JSONObject;
@@ -98,11 +108,58 @@ public class MainListViewAdapter extends BaseAdapter {
         );
         return convertView;
     }
-
+    /**
+     * 弹出对话框收集用户需要采集的So调用信息
+     */
+    private void showDialogForList(AppBean bean,Context context) {
+        View view = LayoutInflater.from(mContext).inflate(R.layout.dialog_input, null);
+        EditText input = view.findViewById(R.id.ed_input);
+        input.setVisibility(View.VISIBLE);
+        JSONObject jsonObject = new JSONObject();
+        ArrayList<String> filtersList = new ArrayList<>();
+        new AlertDialog.Builder(context)
+                .setView(view)
+                .setPositiveButton("确定", (dialog, which) -> {
+                    String inputStr = input.getText().toString();
+                    try {
+                        if (inputStr.equals("ALL")) {
+                            jsonObject.put(IS_LISTEN_TO_ALL, true);
+                        } else {
+                            jsonObject.put(IS_LISTEN_TO_ALL, false);
+                            if (input.length() >= 1) {
+                                String[] split = inputStr.split("\\|");
+                                CLog.e("input str msg -> " + Arrays.toString(split));
+                                filtersList.addAll(Arrays.asList(split));
+                                if (isTraceIl2cpp.isChecked() && filtersList.size() >= 1) {
+                                    String listJsonStr = GsonUtils.obj2str(filtersList);
+                                    CLog.e("filter list json -> " + listJsonStr);
+                                    jsonObject.put(FILTER_LIST, listJsonStr);
+                                }
+                            }
+                        }
+                    } catch (Throwable e) {
+                        CLog.e("put filter list error " + e);
+                    }
+                    //保存数据
+                    saveConfig(bean, jsonObject);
+                    // 点击了确认按钮
+                    dialog.dismiss();
+                })
+                .setNegativeButton("取消", (dialog, which) -> {
+                    // 点击了取消按钮
+                    dialog.dismiss();
+                })
+                .create()
+                .show();
+    }
     /**
      * 保存配置信息
      */
     public void initConfig(AppBean bean) {
+        if(isTraceIl2cpp.isChecked()){
+            showDialogForList(bean,mContext);
+            return;
+        }
         saveConfig(bean, null);
     }
 

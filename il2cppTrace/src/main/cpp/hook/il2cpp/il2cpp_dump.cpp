@@ -14,6 +14,10 @@
 #include <unistd.h>
 #include <list>
 #include <memory>
+#include <algorithm>
+#include <string>
+#include <vector>
+
 
 #include "xdl.h"
 #include "ZhenxiLog.h"
@@ -25,7 +29,9 @@
 #include "ffi.h"
 #include "ffi_cxx.h"
 #include <sys/mman.h>
+#include <main.h>
 
+#include "dobby.h"
 
 #define DO_API(r, n, p) r (*n) p
 
@@ -531,169 +537,54 @@ void hook_invoke(void *handle, const char *outDir) {
 
 
 static size_t hookSize = 0;
-
-// 将 IL2CPP 类型转换为 libffi 类型
-ffi_type *il2cpp_type_to_ffi_type(const Il2CppType *type) {
-    switch (type->type) {
-        case IL2CPP_TYPE_VOID:
-            return &ffi_type_void;
-        case IL2CPP_TYPE_BOOLEAN:
-            return &ffi_type_uint8;
-        case IL2CPP_TYPE_CHAR:
-            return &ffi_type_sint16;
-        case IL2CPP_TYPE_I1:
-            return &ffi_type_sint8;
-        case IL2CPP_TYPE_U1:
-            return &ffi_type_uint8;
-        case IL2CPP_TYPE_I2:
-            return &ffi_type_sint16;
-        case IL2CPP_TYPE_U2:
-            return &ffi_type_uint16;
-        case IL2CPP_TYPE_I4:
-            return &ffi_type_sint32;
-        case IL2CPP_TYPE_U4:
-            return &ffi_type_uint32;
-        case IL2CPP_TYPE_I8:
-            return &ffi_type_sint64;
-        case IL2CPP_TYPE_U8:
-            return &ffi_type_uint64;
-        case IL2CPP_TYPE_R4:
-            return &ffi_type_float;
-        case IL2CPP_TYPE_R8:
-            return &ffi_type_double;
-        case IL2CPP_TYPE_STRING:
-        case IL2CPP_TYPE_CLASS:
-        case IL2CPP_TYPE_OBJECT:
-        case IL2CPP_TYPE_ARRAY:
-        case IL2CPP_TYPE_SZARRAY:
-            return &ffi_type_pointer;
-        default: {
-            return &ffi_type_void;
-        }
-    }
-}
-
 struct ClosureUserData {
     const MethodInfo *method;
     void *orig_function_pointer;
 };
 
-static void ffi_closure_func(ffi_cif *cif, void *ret, void **args, void *user_data) {
-    if (cif == nullptr) {
-        LOGI("ffi_closure_func cif ==null")
-        return;
-    }
-    auto closure_data = static_cast<ClosureUserData *>(user_data);
-    auto method = closure_data->method;
-    if (method == nullptr) {
-        LOGI("ffi_closure_func method ==null")
-        return;
-    }
-    void *orig_function_pointer = closure_data->orig_function_pointer;
-    if (orig_function_pointer == nullptr) {
-        LOGI("ffi_closure_func orig_function_pointer ==null")
-        return;
-    }
-    if (ret == nullptr) {
-        LOGE("Invalid ret pointer in ffi_closure_func");
-        return;
-    }
-    if (args == nullptr) {
-        LOGE("Invalid args pointer in ffi_closure_func");
-        return;
-    }
-    LOGE("Method called: %s", getMethodInfo(method).c_str())
-    ffi_call(cif, FFI_FN(orig_function_pointer), ret, args);
-    LOGE("Method called success ! : %s", getMethodInfo(method).c_str())
+std::list<std::shared_ptr<ClosureUserData>> &getMethodInfoList() {
+    static std::list<std::shared_ptr<ClosureUserData>> methodInfoList;
+    return methodInfoList;
 }
-
-ffi_type **get_ffi_arg_types(const MethodInfo *method, uint32_t param_count) {
-    uint32_t iflags = 0;
-    auto flags = il2cpp_method_get_flags(method, &iflags);
-    bool is_instance_method = (flags & METHOD_ATTRIBUTE_STATIC) == 0;
-    //il2cpp可能会存在隐藏的this指针
-    uint32_t total_param_count = param_count + (is_instance_method ? 1 : 0);
-    auto **arg_types = static_cast<ffi_type **>(malloc(sizeof(ffi_type *) * total_param_count));
-    if (arg_types == nullptr) {
-        return nullptr;
-    }
-    int offset = 0;
-    if (is_instance_method) {
-        arg_types[0] = &ffi_type_pointer;
-        offset = 1;
-    }
-    for (int i = 0; i < param_count; ++i) {
-        const Il2CppType *param_type = il2cpp_method_get_param(method, i);
-        arg_types[i + offset] = il2cpp_type_to_ffi_type(param_type);
-        LOGD("get_ffi_arg_types: arg_type[%d] = %d", i + offset, (int) arg_types[i + offset]->type);
-    }
-    return arg_types;
-}
-
-ffi_type *get_ffi_ret_type(const MethodInfo *method) {
-    const Il2CppType *ret_type = il2cpp_method_get_return_type(method);
-    return il2cpp_type_to_ffi_type(ret_type);
-}
-
-std::unique_ptr<ffi_closure, void (*)(void *)> create_ffi_closure(ffi_cif *cif, void *user_data) {
-    ffi_closure *closure;
-    void *closure_func;
-
-    closure = static_cast<ffi_closure *>(ffi_closure_alloc(sizeof(ffi_closure), &closure_func));
-    if (!closure) {
-        LOGE("Failed to allocate closure");
-        return {nullptr, [](void *) {}};
-    }
-    return {closure, ffi_closure_free};
-}
-
-bool hook_il2cpp_method(const MethodInfo *method, void *pointer) {
-    uint32_t param_count = il2cpp_method_get_param_count(method);
-    std::unique_ptr<ffi_type *[], void (*)(void *)> arg_types(
-            get_ffi_arg_types(method, param_count), free);
-    if (!arg_types) {
-        LOGE("Failed to allocate arg_types array");
-        return false;
-    }
-
-    uint32_t iflags = 0;
-    auto flags = il2cpp_method_get_flags(method, &iflags);
-    bool is_instance_method = (flags & METHOD_ATTRIBUTE_STATIC) == 0;
-    uint32_t total_param_count = param_count + (is_instance_method ? 1 : 0);
-
-    ffi_type *ret_type = get_ffi_ret_type(method);
-    ffi_cif cif;
-    ffi_prep_cif(&cif, FFI_DEFAULT_ABI, total_param_count, ret_type, arg_types.get());
-    LOGI("cif: abi = %d, nargs = %u, rtype = %d", cif.abi, cif.nargs, cif.rtype->type);
-    auto closure = create_ffi_closure(&cif, (void *) method);
-    if (!closure) {
-        LOGE("Failed to create closure");
-        return false;
-    }
-    void *orig_function_pointer = nullptr;
-    bool isSuccess = HookUtils::Hooker(pointer,
-                                       closure.get(),
-                                       (void **) &orig_function_pointer);
-    if (isSuccess && orig_function_pointer != nullptr) {
-        auto *user_data = new ClosureUserData{method, orig_function_pointer};
-        ffi_closure *raw_closure = closure.release(); // 获取原始指针并防止unique_ptr删除closure
-        ffi_status status = ffi_prep_closure_loc
-                (raw_closure, &cif, ffi_closure_func, user_data, raw_closure);
-        if (status != FFI_OK) {
-            LOGE("Failed to prepare closure");
-            ffi_closure_free(closure.get());
-            delete user_data;
-            return false;
+void instrument_callback(void *address, DobbyRegisterContext *reg_ctx) {
+    for (const auto &info: getMethodInfoList()) {
+        if (info->orig_function_pointer == address) {
+            LOGI("Method is called %s", getMethodInfo(info->method).c_str())
+            return;
         }
-        hookSize++;
-    } else {
-        LOGE("hook method fail ");
     }
-    return isSuccess;
+    LOGI("not find callback method info %p", address)
 }
+bool hook_il2cpp_method(const MethodInfo *method) {
+    void *method_address = (void *) method->methodPointer;
+    if (method_address == nullptr) {
+        LOGE("Method address is NULL");
+        return false;
+    }
 
+    auto pData = std::make_shared<ClosureUserData>();
+    pData->method = method;
+    pData->orig_function_pointer = method_address;
+
+    if (HookUtils::addTrampoline(method_address, instrument_callback)) {
+        getMethodInfoList().push_back(pData);
+        return true;
+    } else {
+        return false;
+    }
+}
+bool ishook(const string& msg){
+    if(isTraceALL){
+        return true;
+    }
+    return std::any_of(filter_list.begin(),
+                       filter_list.end(),
+                       [&msg](const string& str) {
+        return StringUtils::containsInsensitive(msg, str);
+    });
+}
 void il2cpp_tracer(const char *outDir) {
-    //HookUtils::startBranchTrampoline();
+    HookUtils::startBranchTrampoline();
     saveDir = std::string(outDir).append("FunIl2cpp_tracer.txt");
     LOGI("il2cpp_tracer tracer... %s", saveDir.c_str())
     size_t size;
@@ -715,11 +606,12 @@ void il2cpp_tracer(const char *outDir) {
                     if (pointer) {
                         const string &methodInfo = getMethodInfo(method);
                         const char *clazzName = il2cpp_class_get_name(klass);
-                        if (StringUtils::containsInsensitive(methodInfo, "fog")) {
-                            auto methodInfoStr = string(clazzName) + " " + methodInfo;
-                            if (hook_il2cpp_method(method, (void *) pointer)) {
+                        auto methodInfoStr = string(clazzName) + " " + methodInfo;
+                        if(ishook(methodInfoStr)){
+                            if (hook_il2cpp_method(method)) {
+                                hookSize++;
                                 LOGI("hook method info success  %s  size-> %zu  %p",
-                                     methodInfoStr.c_str(), hookSize,((char*)pointer-il2cpp_base))
+                                     methodInfoStr.c_str(), hookSize, ((char *) pointer - il2cpp_base))
                             } else {
                                 LOGE("Failed to hook method: %s", methodInfoStr.c_str());
                             }

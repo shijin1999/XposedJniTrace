@@ -5,8 +5,7 @@
 
 #include "logging.h"
 
-
-
+#include "dobby.h"
 
 #ifndef VMP_HOOKUTILS_H
 #define VMP_HOOKUTILS_H
@@ -26,6 +25,8 @@ public:
     static bool Hooker(void *dysym, void *repl, void **org, const char *dynSymName);
 
     static bool Hooker(const char *libName, const char *dysym, void *repl, void **org);
+
+    static bool addTrampoline(void *dysym , dobby_instrument_callback_t pre_handler);
 
     static void startBranchTrampoline();
 

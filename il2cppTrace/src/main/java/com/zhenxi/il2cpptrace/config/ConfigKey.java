@@ -31,7 +31,7 @@ public class ConfigKey {
     public static final String IS_Il2CPPTRACE ="IS_Il2CPPTRACE";
 
     /**
-     * 是否监听全部的SO文件
+     * 是否监听全部的il2cpp方法调用
      */
     public static final String IS_LISTEN_TO_ALL="IS_LISTEN_TO_ALL";
 

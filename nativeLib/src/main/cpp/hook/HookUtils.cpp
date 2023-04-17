@@ -5,11 +5,7 @@
 #include <list>
 
 #include "HookUtils.h"
-/**
- * 全局应该只有这一个地方导入dobby.h
- * dobby hook入口
- */
-#include <dobby.h>
+
 /**
  * sandhook里面的inlinehook
  * 异常hook的实现
@@ -155,7 +151,13 @@ bool HookUtils::Hooker(void *dysym, void *repl, void **org, const char *dynSymNa
     }
     return false;
 }
-
+/**
+ * 对一个方法进行插装
+ * dobby_instrument_callback_t
+ */
+bool HookUtils::addTrampoline(void *dysym,dobby_instrument_callback_t pre_handler) {
+    return DobbyInstrument(dysym,pre_handler) == RT_SUCCESS;
+}
 /**
  *
  * @param libName  So的路径
@@ -176,6 +178,9 @@ bool HookUtils::Hooker(const char *libName, const char *dysym, void *repl, void 
     }
     return isSucess;
 }
+
+
+
 /**
  * 处理libc相关
  */
