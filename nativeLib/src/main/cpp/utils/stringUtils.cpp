@@ -54,6 +54,26 @@ bool StringUtils::startWith(const char *s, const std::string &suffix) {
     return startWith(str,suffix);
 }
 
+std::string to_lower(const std::string& str) {
+    std::string lower_str = str;
+    std::transform(lower_str.begin(), lower_str.end(), lower_str.begin(),
+                   [](unsigned char c) { return std::tolower(c); });
+    return lower_str;
+}
+
+std::string to_upper(const std::string& str) {
+    std::string upper_str = str;
+    std::transform(upper_str.begin(), upper_str.end(), upper_str.begin(),
+                   [](unsigned char c) { return std::toupper(c); });
+    return upper_str;
+}
+
+bool StringUtils::containsInsensitive(const std::string& str, const std::string& substr) {
+    std::string str_lower = to_lower(str);
+    std::string substr_lower = to_lower(substr);
+    return str_lower.find(substr_lower) != std::string::npos;
+}
+
 bool StringUtils::contains(const std::string &str, const std::string &suffix) {
     if (str.find(suffix) == std::string::npos){
         return false;

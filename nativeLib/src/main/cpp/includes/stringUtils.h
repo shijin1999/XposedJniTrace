@@ -55,6 +55,13 @@ namespace StringUtils {
     bool contains(const std::string &str, const std::string &suffix);
 
     bool contains(const char *s, const std::string &suffix);
+    /**
+     * 包含不区分大小写
+     * @param str
+     * @param substr
+     * @return
+     */
+    bool containsInsensitive(const std::string& str, const std::string& substr);
 
     int replace(std::string &str, const std::string &pattern, const std::string &newpat);
 
