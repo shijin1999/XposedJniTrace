@@ -549,7 +549,7 @@ std::list<std::shared_ptr<ClosureUserData>> &getMethodInfoList() {
 void instrument_callback(void *address, DobbyRegisterContext *reg_ctx) {
     for (const auto &info: getMethodInfoList()) {
         if (info->orig_function_pointer == address) {
-            LOGI("Method is called %s", getMethodInfo(info->method).c_str())
+            LOGI(">>>>>>>> %s %p", getMethodInfo(info->method).c_str(),(char*)address-il2cpp_base)
             return;
         }
     }
