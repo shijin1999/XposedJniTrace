@@ -14,6 +14,14 @@
   ret (*orig_##func)(__VA_ARGS__)=nullptr; \
   ret new_##func(__VA_ARGS__)
 
+#define HOOK_ADDRES(base,offset,name) bool is##name = HookUtils::Hooker((char *) il2cpp_base + offset,\
+                                (void *) new_##name, \
+                                (void **) &orig_##name);                                         \
+                                if(is##name){                                                    \
+                                   LOGE(#name)     \
+                                } \
+
+
 class HookUtils {
 public:
     static bool HookerForSign(void *dysym, void *newrep, void **org);
