@@ -338,7 +338,7 @@ std::string dump_type(const Il2CppType *type) {
     return outPut.str();
 }
 
-void il2cpp_api_init(void *handle) {
+void* il2cpp_api_init(void *handle) {
     init_il2cpp_api(handle);
     if (il2cpp_domain_get_assemblies) {
         Dl_info dlInfo;
@@ -348,7 +348,7 @@ void il2cpp_api_init(void *handle) {
         LOGI("il2cpp_base: %p", dlInfo.dli_fbase);
     } else {
         LOGE("Failed to initialize il2cpp api.");
-        return;
+        return nullptr;
     }
     while (!il2cpp_is_vm_thread(nullptr)) {
         LOGI("Waiting for il2cpp_init...");
@@ -356,6 +356,7 @@ void il2cpp_api_init(void *handle) {
     }
     auto domain = il2cpp_domain_get();
     il2cpp_thread_attach(domain);
+    return (void*)il2cpp_base;
 }
 
 using namespace std;

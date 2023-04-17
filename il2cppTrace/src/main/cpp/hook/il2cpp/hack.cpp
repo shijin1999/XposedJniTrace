@@ -32,7 +32,7 @@ void hack_start(const char *path, const char *game_data_dir) {
         LOG(ERROR) << ">>>>>>>>> hack_start xdl_open [%s] == null" << path;
         return;
     }
-    il2cpp_api_init(handle);
+    void *il2cpp_base = il2cpp_api_init(handle);
     if(isTraceIl2cpp){
         il2cpp_tracer(game_data_dir);
         //hook_invoke(handle,game_data_dir);

@@ -7,7 +7,7 @@
 
 #include "elf_util.h"
 
-void il2cpp_api_init(void *handle);
+void* il2cpp_api_init(void *handle);
 
 void il2cpp_dump(const char *outDir);
 /**
