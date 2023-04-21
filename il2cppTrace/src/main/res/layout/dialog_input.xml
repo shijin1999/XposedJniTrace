@@ -1,0 +1,32 @@
+<LinearLayout
+    android:layout_marginTop="20dp"
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:orientation="vertical"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content">
+
+
+
+    <EditText
+        android:id="@+id/ed_input"
+        android:inputType="text"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:layout_marginLeft="4dp"
+        android:layout_marginRight="4dp"
+        android:layout_marginBottom="16dp"
+        android:fontFamily="sans-serif"
+        android:hint="AAA|BBB|..."/>
+
+    <TextView
+        android:text="输入需要监听的il2cpp方法关键字,比如Hero,Hp,用|分割"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:scaleType="center"
+        android:textColor="#fff"
+        android:background="#1baaf2"
+        />
+
+</LinearLayout>
+
